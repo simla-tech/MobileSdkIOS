@@ -1,0 +1,15 @@
+"core.error.customer_external_id_empty" = "El ID externo del cliente no puede estar vacío.";
+"core.error.crm_site_code_empty" = "El código del sitio de CRM no puede estar vacío.";
+"core.error.customer_id_empty" = "Se requiere el ID del cliente o su ID externo.";
+"core.error.customer_id_not_positive" = "El ID del cliente debe ser mayor que cero.";
+"core.error.customer_external_id_too_long" = "El ID externo del cliente no debe superar los 255 caracteres.";
+"core.error.crm_site_code_too_long" = "El código del sitio de CRM no debe superar los 255 caracteres.";
+"core.error.keychain_invalid_token_data" = "El token de usuario del consultor guardado no es un valor UTF-8 válido.";
+"core.error.keychain_unexpected_status" = "La operación de Keychain falló con el estado %d.";
+"core.error.session_http_status" = "La conexión falló con el estado HTTP %d.";
+"core.error.session_missing_credentials" = "La respuesta de conexión no contiene las credenciales de sesión.";
+"core.error.request_encoding_failed" = "No se pudieron codificar los datos: %@";
+"core.error.response_decoding_failed" = "No se pudieron decodificar los datos: %@";
+"core.error.request_failed" = "La solicitud de conexión falló: %@";
+"core.error.cancelled" = "Se canceló la operación de conexión.";
+"core.error.unexpected" = "La operación de Core falló: %@";

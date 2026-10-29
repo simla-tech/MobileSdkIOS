@@ -1,0 +1,15 @@
+"core.error.customer_external_id_empty" = "Внешний ID клиента не должен быть пустым.";
+"core.error.crm_site_code_empty" = "Код сайта CRM не должен быть пустым.";
+"core.error.customer_id_empty" = "Необходимо указать ID клиента или внешний ID.";
+"core.error.customer_id_not_positive" = "ID клиента должен быть больше нуля.";
+"core.error.customer_external_id_too_long" = "Внешний ID клиента не должен превышать 255 символов.";
+"core.error.crm_site_code_too_long" = "Код сайта CRM не должен превышать 255 символов.";
+"core.error.keychain_invalid_token_data" = "Сохранённый токен пользователя консультанта не является корректной строкой UTF-8.";
+"core.error.keychain_unexpected_status" = "Операция Keychain завершилась со статусом %d.";
+"core.error.session_http_status" = "Подключение завершилось с HTTP-статусом %d.";
+"core.error.session_missing_credentials" = "Ответ подключения не содержит данные сессии.";
+"core.error.request_encoding_failed" = "Не удалось закодировать данные: %@";
+"core.error.response_decoding_failed" = "Не удалось декодировать данные: %@";
+"core.error.request_failed" = "Запрос подключения завершился ошибкой: %@";
+"core.error.cancelled" = "Операция подключения отменена.";
+"core.error.unexpected" = "Операция Core завершилась ошибкой: %@";
