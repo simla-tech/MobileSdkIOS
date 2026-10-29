@@ -51,10 +51,10 @@ Swift-модуль / CocoaPods - Назначение
 В Xcode выберите **File → Add Package Dependencies** и укажите:
 
 ```text
-https://github.com/simla-tech/MobileSdkIosTest.git
+https://github.com/simla-tech/MobileSdkIOS.git
 ```
 
-Выберите **Branch → main**. Для подключения по версии нужен опубликованный Git-тег. 
+Выберите **Exact Version → 0.1.0** для конкретного выпуска или **Branch → main** для подключения из ветки.
 
 Добавьте продукт `Core` и необходимые продукты SDK к таргету приложения.
 Например, для чата — `Core` и `OnlineConsultant`.
@@ -71,10 +71,21 @@ platform :ios, '15.0'
 use_frameworks! :linkage => :static
 
 sdk_source = {
-  :git => 'git@github.com:simla-tech/MobileSdkIosTest.git',
+  :git => 'https://github.com/simla-tech/MobileSdkIOS.git',
   :branch => 'main'
 }
 ```
+
+Этот вариант устанавливает SDK из ветки `main`. Для установки конкретного выпуска замените `sdk_source` на:
+
+```ruby
+sdk_source = {
+  :git => 'https://github.com/simla-tech/MobileSdkIOS.git',
+  :tag => '0.1.0'
+}
+```
+
+`Podfile.lock` фиксирует установленный коммит. Для обновления SDK из ветки выполните `pod update` с именами подключённых `Simla*` pods.
 
 Выберите нужный вариант `target` ниже. Каждый пример включает все зависимости SDK необходимые дляработы того или иного модуля.
 Если используете несколько модулей, объедините их списки в одном `target`, указав каждый pod один раз.

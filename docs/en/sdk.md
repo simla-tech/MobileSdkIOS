@@ -49,10 +49,10 @@ The modules share the `Core` session.
 In Xcode, select **File → Add Package Dependencies** and enter:
 
 ```text
-https://github.com/simla-tech/MobileSdkIosTest.git
+https://github.com/simla-tech/MobileSdkIOS.git
 ```
 
-Select **Branch → main**. Installing a specific version requires a published Git tag.
+Select **Exact Version → 0.1.0** for a specific release or **Branch → main** to install from the branch.
 
 Add `Core` and the required SDK products to your application target.
 For example, chat requires `Core` and `OnlineConsultant`.
@@ -69,10 +69,21 @@ platform :ios, '15.0'
 use_frameworks! :linkage => :static
 
 sdk_source = {
-  :git => 'git@github.com:simla-tech/MobileSdkIosTest.git',
+  :git => 'https://github.com/simla-tech/MobileSdkIOS.git',
   :branch => 'main'
 }
 ```
+
+This configuration installs the SDK from the `main` branch. To install a specific release, replace `sdk_source` with:
+
+```ruby
+sdk_source = {
+  :git => 'https://github.com/simla-tech/MobileSdkIOS.git',
+  :tag => '0.1.0'
+}
+```
+
+`Podfile.lock` records the installed commit. To update the SDK from the branch, run `pod update` with the names of the installed `Simla*` pods.
 
 Choose a `target` configuration below. Each example includes all SDK dependencies required by that module.
 For multiple modules, combine their lists in one `target`, declaring each pod only once.
