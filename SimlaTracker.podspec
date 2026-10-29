@@ -2,10 +2,10 @@ Pod::Spec.new do |s|
   s.name = 'SimlaTracker'
   s.version = '0.1.0'
   s.summary = 'Event tracking and persistent event storage for the Simla iOS SDK.'
-  s.homepage = 'https://github.com/simla-tech/MobileSdkIosTest'
+  s.homepage = 'https://github.com/simla-tech/MobileSdkIOS'
   s.license = { :type => 'Apache-2.0', :file => 'LICENSE' }
   s.author = 'Simla'
-  s.source = { :git => 'https://github.com/simla-tech/MobileSdkIosTest.git', :tag => s.version.to_s }
+  s.source = { :git => 'https://github.com/simla-tech/MobileSdkIOS.git', :tag => s.version.to_s }
   s.ios.deployment_target = '15.0'
   s.swift_version = '5.0'
   s.module_name = 'Tracker'
