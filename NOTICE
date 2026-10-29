@@ -1,0 +1,27 @@
+Simla iOS SDK
+Copyright 2026 DIGITAL RETAIL TECHNOLOGIES, S.L.
+
+The PushService module uses Firebase iOS SDK (FirebaseCore,
+FirebaseMessaging and FirebaseInstallations), licensed under
+the Apache License 2.0.
+
+Source repository: https://github.com/firebase/firebase-ios-sdk
+
+Its transitive dependencies include:
+
+GoogleUtilities — Apache License 2.0
+https://github.com/google/GoogleUtilities
+
+GoogleDataTransport — Apache License 2.0
+https://github.com/google/GoogleDataTransport
+
+Google Promises — Apache License 2.0
+https://github.com/google/promises
+
+nanopb — zlib License
+Copyright (c) 2011 Petteri Aimonen
+https://github.com/firebase/nanopb
+
+IsAppEncrypted, included in GoogleUtilities — MIT License
+Copyright (c) 2017 Landon J. Fuller landon@landonf.org
+All rights reserved.
