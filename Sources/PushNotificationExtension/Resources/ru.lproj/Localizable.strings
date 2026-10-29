@@ -1,0 +1,5 @@
+"push_status.error.http_status" = "Отправка статуса push-уведомления завершилась с HTTP-статусом %d.";
+"push_status.error.http_status_with_details" = "Отправка статуса push-уведомления завершилась с HTTP-статусом %d: %@";
+"push_status.error.invalid_http_response" = "Ответ отправки статуса push-уведомления не является корректным HTTP-ответом: %@";
+"push_status.error.request_encoding_failed" = "Не удалось закодировать запрос отправки статуса push-уведомления: %@";
+"push_status.error.request_failed" = "Отправка статуса push-уведомления завершилась ошибкой: %@";

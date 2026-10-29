@@ -1,0 +1,5 @@
+"push_status.error.http_status" = "Push status request failed with HTTP status %d.";
+"push_status.error.http_status_with_details" = "Push status request failed with HTTP status %d: %@";
+"push_status.error.invalid_http_response" = "Push status response is not a valid HTTP response: %@";
+"push_status.error.request_encoding_failed" = "Push status request could not be encoded: %@";
+"push_status.error.request_failed" = "Push status request failed: %@";

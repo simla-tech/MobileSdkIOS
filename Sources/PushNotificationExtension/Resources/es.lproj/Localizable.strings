@@ -1,0 +1,5 @@
+"push_status.error.http_status" = "La solicitud del estado push falló con el estado HTTP %d.";
+"push_status.error.http_status_with_details" = "La solicitud del estado push falló con el estado HTTP %d: %@";
+"push_status.error.invalid_http_response" = "La respuesta del estado push no es una respuesta HTTP válida: %@";
+"push_status.error.request_encoding_failed" = "No se pudo codificar la solicitud del estado push: %@";
+"push_status.error.request_failed" = "La solicitud del estado push falló: %@";

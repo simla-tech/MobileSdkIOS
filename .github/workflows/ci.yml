@@ -1,0 +1,216 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+
+jobs:
+  builds:
+    name: ${{ matrix.name }}
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: spm
+            name: SPM build
+          - kind: pod
+            name: Pod build
+    env:
+      COCOAPODS_DISABLE_STATS: 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build all SDK modules for iOS
+        if: ${{ matrix.kind == 'spm' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -scheme ConsultantSdk-Package \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/SimlaDerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SimlaSourcePackages" \
+            build CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/spm-build.log"
+
+      - name: Build SPM tests for simulator
+        if: ${{ matrix.kind == 'spm' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -scheme ConsultantSdk-Package \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/SimlaDerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SimlaSourcePackages" \
+            build-for-testing CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/spm-build-for-testing.log"
+
+      - name: Package compiled tests
+        if: ${{ matrix.kind == 'spm' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          products="$RUNNER_TEMP/SimlaDerivedData/Build/Products"
+          shopt -s nullglob
+          test_runs=("$products/"*.xctestrun)
+          if [[ ${#test_runs[@]} -ne 1 ]]; then
+            echo "Expected exactly one xctestrun file, found ${#test_runs[@]}" >&2
+            exit 1
+          fi
+          tar -C "$products" -czf "$RUNNER_TEMP/spm-test-products.tar.gz" \
+            Debug-iphonesimulator "$(basename "${test_runs[0]}")"
+
+      - name: Upload compiled tests
+        if: ${{ matrix.kind == 'spm' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: spm-test-products
+          path: ${{ runner.temp }}/spm-test-products.tar.gz
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload SPM build logs
+        if: ${{ !cancelled() && matrix.kind == 'spm' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: spm-build-results
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/spm-build.log
+            ${{ runner.temp }}/spm-build-for-testing.log
+
+      - name: Prepare CocoaPods application and extension
+        if: ${{ matrix.kind == 'pod' }}
+        run: |
+          pod --version
+          ruby .github/scripts/prepare-pod-build.rb \
+            "$GITHUB_WORKSPACE" "$RUNNER_TEMP/SimlaPodBuild"
+
+      - name: Install local SDK pods
+        if: ${{ matrix.kind == 'pod' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/SimlaPodBuild"
+          pod install 2>&1 | tee "$RUNNER_TEMP/pod-install.log"
+
+      - name: Build CocoaPods application and extension
+        if: ${{ matrix.kind == 'pod' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace "$RUNNER_TEMP/SimlaPodBuild/PodBuild.xcworkspace" \
+            -scheme PodBuild \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/SimlaPodDerivedData" \
+            build CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/pod-build.log"
+
+      - name: Upload CocoaPods build logs
+        if: ${{ !cancelled() && matrix.kind == 'pod' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pod-build-results
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/pod-install.log
+            ${{ runner.temp }}/pod-build.log
+
+  module_tests:
+    name: Tests / ${{ matrix.module }}
+    needs: builds
+    runs-on: macos-26
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: Core
+            target: ConsultantSdkTests
+          - module: OnlineConsultant
+            target: OnlineConsultantTests
+          - module: PushService
+            target: PushServiceTests
+          - module: PushNotificationExtension
+            target: PushNotificationExtensionTests
+          - module: Recommendations
+            target: RecommendationsTests
+          - module: Tracker
+            target: TrackerTests
+          - module: SQLiteStorage
+            target: SQLiteStorageTests
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download compiled SPM tests
+        uses: actions/download-artifact@v8
+        with:
+          name: spm-test-products
+          path: ${{ runner.temp }}/SimlaDerivedData/Build/Products
+
+      - name: Select iPhone simulator
+        id: simulator
+        run: python3 .github/scripts/select-simulator.py
+
+      - name: Run module tests
+        shell: bash
+        env:
+          TEST_TARGET: ${{ matrix.target }}
+          SIMULATOR_ID: ${{ steps.simulator.outputs.device_id }}
+        run: |
+          set -euo pipefail
+          products="$RUNNER_TEMP/SimlaDerivedData/Build/Products"
+          tar -xzf "$products/spm-test-products.tar.gz" -C "$products"
+          shopt -s nullglob
+          test_runs=("$products/"*.xctestrun)
+          if [[ ${#test_runs[@]} -ne 1 ]]; then
+            echo "Expected exactly one xctestrun file, found ${#test_runs[@]}" >&2
+            exit 1
+          fi
+          xcodebuild \
+            -xctestrun "${test_runs[0]}" \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -only-testing:"$TEST_TARGET" \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/$TEST_TARGET.xcresult" \
+            test-without-building CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/$TEST_TARGET.log"
+
+      - name: Upload module test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: tests-${{ matrix.module }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/${{ matrix.target }}.xcresult
+            ${{ runner.temp }}/${{ matrix.target }}.log

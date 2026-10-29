@@ -1,0 +1,15 @@
+"core.error.customer_external_id_empty" = "Customer external ID must not be blank.";
+"core.error.crm_site_code_empty" = "CRM site code must not be blank.";
+"core.error.customer_id_empty" = "Customer ID or external ID is required.";
+"core.error.customer_id_not_positive" = "Customer ID must be greater than zero.";
+"core.error.customer_external_id_too_long" = "Customer external ID must not exceed 255 characters.";
+"core.error.crm_site_code_too_long" = "CRM site code must not exceed 255 characters.";
+"core.error.keychain_invalid_token_data" = "Stored consultant user token is not valid UTF-8.";
+"core.error.keychain_unexpected_status" = "Keychain operation failed with status %d.";
+"core.error.session_http_status" = "Connect failed with HTTP status %d.";
+"core.error.session_missing_credentials" = "Connect response does not contain session credentials.";
+"core.error.request_encoding_failed" = "Could not encode data: %@";
+"core.error.response_decoding_failed" = "Could not decode data: %@";
+"core.error.request_failed" = "Connect request failed: %@";
+"core.error.cancelled" = "Connection operation was cancelled.";
+"core.error.unexpected" = "Consultant core operation failed: %@";
