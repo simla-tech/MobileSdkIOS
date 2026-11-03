@@ -141,6 +141,49 @@ jobs:
             ${{ runner.temp }}/pod-install.log
             ${{ runner.temp }}/pod-build.log
 
+  hosted_tests:
+    name: Tests / TestHost
+    needs: builds
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Select iPhone simulator
+        id: simulator
+        run: python3 .github/scripts/select-simulator.py
+
+      - name: Run application-hosted push tests
+        shell: bash
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.device_id }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project TestHost/SDKTestHost.xcodeproj \
+            -scheme SDKHostedTests \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath "$RUNNER_TEMP/SimlaHostedDerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SimlaSourcePackages" \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/SDKHostedTests.xcresult" \
+            test CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/SDKHostedTests.log"
+
+      - name: Upload application-hosted test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: tests-TestHost
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/SDKHostedTests.xcresult
+            ${{ runner.temp }}/SDKHostedTests.log
+
   module_tests:
     name: Tests / ${{ matrix.module }}
     needs: builds
@@ -148,6 +191,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - module: Core

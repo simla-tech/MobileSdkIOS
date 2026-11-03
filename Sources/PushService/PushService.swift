@@ -1,17 +1,14 @@
 import CryptoKit
-import FirebaseCore
 import UIKit
 import PushNotificationExtension
-import FirebaseInstallations
-import FirebaseMessaging
 import Foundation
 import Core
 import UserNotifications
 
-/// Entry point for apps that manage Firebase/APNs integration themselves.
+/// Registers application-supplied push identifiers and categories and handles RetailCRM notifications.
 ///
-/// Use `PushService` to register FCM tokens or Firebase installation IDs and to report notification
-/// status changes when the host app already owns notification delegates and Firebase setup.
+/// The application configures Firebase and APNs, obtains FCM tokens or Firebase installation IDs,
+/// and forwards notification delegate events. Supply each token with its Firebase project ID.
 public final class PushService: NSObject {
 
     /// Called on the main queue when a RetailCRM notification or button is opened.
@@ -19,8 +16,9 @@ public final class PushService: NSObject {
     /// The application decides how to navigate; dismissing a notification does not call this handler.
     @MainActor public var onNotificationOpen: ((NotificationAction) -> Void)?
 
-    /// Reports each completed backend registration or unregistration attempt on the main actor.
-    /// Reusing a confirmed registration does not emit a result.
+    /// Reports automatic registration or unsubscription results on the main actor.
+    /// Includes parameter validation failures, such as an empty project ID, before any server request.
+    /// Assigning the handler, reusing a confirmed registration, and superseding a pending call emit no result.
     @MainActor public var onPushRegistrationResult: ((Result<PushToken, PushServiceError>) -> Void)?
 
     /// Receives the current retry queue and future push-status retry updates for this site.
@@ -41,7 +39,7 @@ public final class PushService: NSObject {
     private let pushHandler: PushHandler
     private let registrationStorage: PushRegistrationStorage
 
-    @MainActor private var pushToken: PushToken?
+    @MainActor private var pushRegistration: (token: PushToken, firebaseProjectId: String)?
     @MainActor private var sessionReadyForPushRegistration = false {
         didSet {
             scheduleAutomaticRegistration()
@@ -68,7 +66,10 @@ public final class PushService: NSObject {
     }
 
     /// Replaces the complete desired subscription. An empty list unsubscribes from all categories.
-    /// Waits for a valid token and connected customer session; skips an already confirmed request.
+    /// Waits for an application-supplied valid token and a connected session with a customer identifier,
+    /// then validates the supplied project ID. Call setToken before awaiting this method in the same task.
+    /// Returns after updating iOS categories and backend acceptance or reuse of a confirmed registration.
+    /// Throws registration and local storage errors; automatic attempt results also reach onPushRegistrationResult.
     @MainActor
     public func registerNotificationCategories(_ categories: [String]) async throws -> PushToken {
         try await withCheckedThrowingContinuation { continuation in
@@ -76,22 +77,18 @@ public final class PushService: NSObject {
         }
     }
 
-    /// Sets an FCM token or Firebase installation ID obtained by the application.
+    /// Stores an application-supplied FCM token or Firebase installation ID together with its project ID.
+    /// Updating either value schedules a registration check. Registration waits for categories and a
+    /// connected session with a customer identifier. The project ID must be nonempty after trimming whitespace.
+    /// Reports registration results through onPushRegistrationResult and pending category registration calls.
     ///
     /// - Parameters:
     ///   - token: FCM token or Firebase Installation ID obtained by the application.
+    ///   - firebaseProjectId: Firebase project ID associated with the token.
     @MainActor
-    public func setToken(_ token: PushToken) {
-        self.pushToken = token
+    public func setToken(_ token: PushToken, firebaseProjectId: String) {
+        self.pushRegistration = (token, firebaseProjectId)
         self.scheduleAutomaticRegistration()
-    }
-
-    /// Resolves an APNs device token to an FCM token or Firebase installation ID.
-    @MainActor
-    public func setDeviceToken(_ token: Data) async throws -> PushToken {
-        try await withCheckedThrowingContinuation { continuation in
-            setDeviceToken(token, completion: { continuation.resume(with: $0) })
-        }
     }
 }
 
@@ -99,6 +96,8 @@ public final class PushService: NSObject {
 public extension PushService {
 
     /// Replaces the full category list, updates iOS categories and applies the backend subscription.
+    /// An empty list unsubscribes from all categories. Waits for an application-supplied valid token and
+    /// a connected customer session, then validates the supplied project ID.
     /// Completion runs on the main actor after backend acceptance, cached confirmation or failure.
     /// A different list replaces pending calls with operationSuperseded before their request starts.
     @MainActor
@@ -133,30 +132,6 @@ public extension PushService {
         pendingRegistrationCompletions.append(finish)
         scheduleAutomaticRegistration()
         superseded.forEach { $0(.failure(.operationSuperseded)) }
-    }
-
-    /// Passes an APNs device token to Firebase and obtains an FCM token or Firebase installation ID.
-    ///
-    /// - Parameters:
-    ///   - token: APNs device token used to obtain a Firebase push identifier.
-    ///   - completion: Receives the FCM token or Firebase installation ID, or an error.
-    @MainActor
-    func setDeviceToken(
-        _ token: Data,
-        completion: @escaping (Result<PushToken, PushServiceError>) -> Void
-    ) {
-        pushToken = nil
-        scheduleAutomaticRegistration()
-        getToken(deviceToken: token) { [weak self] result in
-            switch result {
-            case .success(let token):
-                self?.pushToken = token
-                self?.scheduleAutomaticRegistration()
-                completion(.success((token)))
-            case .failure(let error):
-                completion(.failure(error))
-            }
-        }
     }
 
     /// Reports `.delivered` for a RetailCRM silent notification received by the app delegate.
@@ -325,7 +300,7 @@ private extension PushService {
                 let identity = await sessionRuntime.customerIdentity
                 // No list means the integrator has not configured this launch yet; [] means unsubscribe.
                 guard sessionReadyForPushRegistration,
-                      let pushToken, (try? pushToken.normalizedToken()) != nil,
+                      let pushRegistration, (try? pushRegistration.token.normalizedToken()) != nil,
                       let identity, let savedCategories = categories else { return }
                 let completions = pendingRegistrationCompletions
                 pendingRegistrationCompletions.removeAll()
@@ -337,8 +312,10 @@ private extension PushService {
                     } catch {
                         throw PushServiceError.invalidCustomerIdentity(error.localizedDescription)
                     }
-                    let token = try pushToken.normalizedToken()
-                    let projectID = try resolvedFirebaseProjectId()
+                    let token = try pushRegistration.token.normalizedToken()
+                    guard let projectID = pushRegistration.firebaseProjectId.nilIfEmpty else {
+                        throw PushServiceError.emptyFirebaseProjectID
+                    }
                     let categories = Array(Set(savedCategories)).sorted()
                     let body = PushTokenRequestBody(
                         customerId: validatedIdentity.customerId,
@@ -386,77 +363,6 @@ private extension PushService {
         }
     }
 
-    @MainActor
-    func getToken(deviceToken: Data, completion: @escaping (Result<PushToken, PushServiceError>) -> Void) {
-        Messaging.messaging().apnsToken = deviceToken
-
-        if Messaging.messaging().isInstallationIdEnabled {
-            messagingRegisterIfPossible { [weak self] result in
-                switch result {
-                case .success:
-                    self?.getFidToken { result in
-                        completion(result.map(PushToken.fid))
-                    }
-                case .failure(let error):
-                    completion(.failure(error))
-                }
-            }
-        } else {
-            getFcmToken { result in
-                completion(result.map(PushToken.fcm))
-            }
-        }
-    }
-
-    func messagingRegisterIfPossible(completion: @escaping (Result<Void, PushServiceError>) -> Void) {
-        guard Messaging.messaging().isInstallationIdEnabled else {
-            completion(.failure(.firebaseInstallationIDDisabled))
-            return
-        }
-
-        Messaging.messaging().register { error in
-            if let error {
-                completion(.failure(.firebaseMessaging(error)))
-                return
-            }
-            completion(.success(()))
-        }
-    }
-
-    func getFcmToken(completion: @escaping (Result<String, PushServiceError>) -> Void) {
-        Messaging.messaging().token { token, error in
-            if let error {
-                completion(.failure(.firebaseMessaging(error)))
-                return
-            }
-            guard let token else {
-                completion(.failure(.emptyFCMToken))
-                return
-            }
-            completion(.success(token))
-        }
-    }
-
-    func getFidToken(completion: @escaping (Result<String, PushServiceError>) -> Void) {
-        Installations.installations().installationID { token, error in
-            if let error {
-                completion(.failure(.firebaseInstallations(error)))
-                return
-            }
-            guard let token else {
-                completion(.failure(.emptyFID))
-                return
-            }
-            completion(.success(token))
-        }
-    }
-
-    func resolvedFirebaseProjectId() throws -> String {
-        if let firebaseProjectId = FirebaseApp.app()?.options.projectID?.nilIfEmpty {
-            return firebaseProjectId
-        }
-        throw PushServiceError.emptyFirebaseProjectID
-    }
 }
 
 extension PushService: SessionLifecycleListener {

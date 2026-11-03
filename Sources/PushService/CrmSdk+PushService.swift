@@ -2,7 +2,7 @@ import Core
 
 public extension CrmSdk {
 
-    /// Shared push module for applications that manage Firebase and notification delegates.
+    /// Shared push module that registers application-supplied tokens and handles notification events.
     var pushService: PushService {
         sharedPushService(for: .direct)
     }

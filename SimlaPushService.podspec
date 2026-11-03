@@ -18,8 +18,5 @@ Pod::Spec.new do |s|
   s.resource_bundles = { 'SimlaPushService' => ['Sources/PushService/Resources/**/*'] }
   s.dependency 'SimlaCore', s.version.to_s
   s.dependency 'SimlaPushNotificationExtension', s.version.to_s
-  s.dependency 'FirebaseCore', '~> 12.17'
-  s.dependency 'FirebaseMessaging', '~> 12.17'
-  s.dependency 'FirebaseInstallations', '~> 12.17'
   s.dependency 'SimlaSQLiteStorage', s.version.to_s
 end

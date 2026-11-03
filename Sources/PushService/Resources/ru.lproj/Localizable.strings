@@ -3,7 +3,6 @@
 "push.error.empty_fcm_token" = "FCM registration token пуст.";
 "push.error.empty_fid" = "Firebase installation id пуст.";
 "push.error.empty_firebase_project_id" = "Firebase project id пуст.";
-"push.error.firebase_installation_id_disabled" = "Режим Firebase installation id отключен.";
 "push.error.missing_customer_identifier" = "Требуется customer id или customer external id.";
 "push.error.invalid_http_response" = "Ответ регистрации push-токена не является корректным HTTP-ответом: %@";
 "push.error.request_encoding_failed" = "Не удалось закодировать запрос регистрации push-токена: %@";
