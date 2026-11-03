@@ -34,9 +34,6 @@ let package = Package(
             targets: ["Tracker"]
         )
     ],
-    dependencies: [
-        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "12.17.0")
-    ],
     targets: [
         .target(name: "SQLiteStorage", linkerSettings: [.linkedLibrary("sqlite3")]),
         .target(name: "SDKConfiguration"),
@@ -63,9 +60,6 @@ let package = Package(
                 "Core",
                 "PushNotificationExtension",
                 "SQLiteStorage",
-                .product(name: "FirebaseCore", package: "firebase-ios-sdk"),
-                .product(name: "FirebaseMessaging", package: "firebase-ios-sdk"),
-                .product(name: "FirebaseInstallations", package: "firebase-ios-sdk"),
             ],
             resources: [
                 .process("Resources")

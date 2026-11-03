@@ -8,7 +8,6 @@ package enum PushLocalization: String {
     case emptyFCMToken = "push.error.empty_fcm_token"
     case emptyFID = "push.error.empty_fid"
     case emptyFirebaseProjectID = "push.error.empty_firebase_project_id"
-    case firebaseInstallationIDDisabled = "push.error.firebase_installation_id_disabled"
     case missingCustomerIdentifier = "push.error.missing_customer_identifier"
     case invalidHTTPResponse = "push.error.invalid_http_response"
     case requestEncodingFailed = "push.error.request_encoding_failed"

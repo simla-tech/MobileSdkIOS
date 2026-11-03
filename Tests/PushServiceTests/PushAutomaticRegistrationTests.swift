@@ -1,4 +1,3 @@
-import FirebaseCore
 import Foundation
 import XCTest
 import UserNotifications
@@ -8,40 +7,16 @@ import UserNotifications
 @MainActor
 final class PushAutomaticRegistrationTests: XCTestCase {
     private var databaseURL: URL!
-    private var originalFirebaseOptions: FirebaseOptions?
-    private var configuredFirebase = false
 
     override func setUp() async throws {
         // UNUserNotificationCenter requires an application-hosted test process.
         try XCTSkipUnless(Bundle.main.bundleURL.pathExtension == "app", "Requires an iOS application test host")
-        originalFirebaseOptions = FirebaseApp.app()?.options
-        await configureFirebase(project: "test-firebase")
-        configuredFirebase = true
         databaseURL = FileManager.default.temporaryDirectory.appendingPathComponent("PushAutomaticTests-\(UUID().uuidString).sqlite")
         PushRegistrationURLProtocol.reset()
     }
 
     override func tearDown() async throws {
         if let databaseURL { try? FileManager.default.removeItem(at: databaseURL) }
-        if configuredFirebase {
-            await deleteFirebaseApp()
-            if let originalFirebaseOptions { FirebaseApp.configure(options: originalFirebaseOptions) }
-        }
-    }
-
-    private func deleteFirebaseApp() async {
-        guard let app = FirebaseApp.app() else { return }
-        await withCheckedContinuation { continuation in
-            app.delete { _ in continuation.resume() }
-        }
-    }
-
-    private func configureFirebase(project: String) async {
-        await deleteFirebaseApp()
-        let options = FirebaseOptions(googleAppID: "1:123456789:ios:0123456789abcdef", gcmSenderID: "123456789")
-        options.apiKey = "A" + String(repeating: "0", count: 38)
-        options.projectID = project
-        FirebaseApp.configure(options: options)
     }
 
     private func service(customer: Int64 = 1) -> PushService {
@@ -75,7 +50,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: blocker) }
         databaseURL = blocker.appendingPathComponent("registration.sqlite")
         let service = service()
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(service)
         do {
             _ = try await service.registerNotificationCategories(["orders"])
@@ -95,7 +70,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
         }
         await settle()
         XCTAssertEqual(PushRegistrationURLProtocol.count, 0)
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         await settle()
         XCTAssertEqual(PushRegistrationURLProtocol.count, 0)
         try connect(service)
@@ -105,7 +80,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
 
     func testNoRequestUntilIntegratorSuppliesListIncludingEmpty() async throws {
         let service = service()
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(service)
         await settle()
         XCTAssertEqual(PushRegistrationURLProtocol.count, 0)
@@ -116,7 +91,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
 
     func testFullListsReplaceCategoriesAndEmptyUnsubscribes() async throws {
         let service = service()
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(service)
         _ = try await service.registerNotificationCategories(["orders", "news"])
         _ = try await service.registerNotificationCategories(["news"])
@@ -129,7 +104,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
 
     func testCategoryOrderAndDuplicatesDoNotCauseRequests() async throws {
         let service = service()
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(service)
         _ = try await service.registerNotificationCategories(["orders", "news"])
         _ = try await service.registerNotificationCategories(["news", "orders", "news"])
@@ -139,12 +114,12 @@ final class PushAutomaticRegistrationTests: XCTestCase {
     func testRestartSkipsConfirmedRegistrationAndUnsubscription() async throws {
         for categories in [["orders"], []] {
             let first = service()
-            first.setToken(.fcm("A"))
+            first.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
             try connect(first)
             _ = try await first.registerNotificationCategories(categories)
             let beforeRestart = PushRegistrationURLProtocol.count
             let restarted = service()
-            restarted.setToken(.fcm("A"))
+            restarted.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
             try connect(restarted)
             _ = try await restarted.registerNotificationCategories(categories)
             XCTAssertEqual(PushRegistrationURLProtocol.count, beforeRestart)
@@ -158,13 +133,13 @@ final class PushAutomaticRegistrationTests: XCTestCase {
         let unrelatedID = "unrelated-\(UUID().uuidString)"
         await addSystemCategory(unrelatedID)
         let first = service()
-        first.setToken(.fcm("A"))
+        first.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(first)
         _ = try await first.registerNotificationCategories([oldID, retainedID])
         await waitForSystemCategories { $0.contains(oldID) && $0.contains(retainedID) && $0.contains(unrelatedID) }
 
         let restarted = service()
-        restarted.setToken(.fcm("A"))
+        restarted.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(restarted)
         _ = try await restarted.registerNotificationCategories([retainedID, newID])
         await waitForSystemCategories {
@@ -180,7 +155,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
 
     func testFailedListIsRetriedAfterRestart() async throws {
         let service = service()
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(service)
         _ = try await service.registerNotificationCategories(["orders"])
         PushRegistrationURLProtocol.statusCode = 500
@@ -190,7 +165,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
         } catch { }
         PushRegistrationURLProtocol.statusCode = 204
         let restarted = self.service()
-        restarted.setToken(.fcm("A"))
+        restarted.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(restarted)
         _ = try await restarted.registerNotificationCategories(["news"])
         _ = try await restarted.registerNotificationCategories(["news"])
@@ -203,7 +178,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
         let failedID = "failed-\(UUID().uuidString)"
         let newID = "new-\(UUID().uuidString)"
         let first = service()
-        first.setToken(.fcm("A"))
+        first.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(first)
         _ = try await first.registerNotificationCategories([oldID])
         PushRegistrationURLProtocol.statusCode = 500
@@ -214,7 +189,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
         await waitForSystemCategories { !$0.contains(oldID) && $0.contains(failedID) }
         PushRegistrationURLProtocol.statusCode = 204
         let restarted = service()
-        restarted.setToken(.fcm("A"))
+        restarted.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(restarted)
         _ = try await restarted.registerNotificationCategories([newID])
         await waitForSystemCategories { !$0.contains(oldID) && !$0.contains(failedID) && $0.contains(newID) }
@@ -238,7 +213,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
             XCTAssertEqual(try? result.get(), .fcm("A"))
             latest.fulfill()
         }
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(service)
         await fulfillment(of: [superseded, latest], timeout: 2)
         XCTAssertEqual(PushRegistrationURLProtocol.count, 1)
@@ -255,7 +230,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
             XCTAssertNotNil(try? result.get())
             firstCompleted.fulfill()
         }
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(service)
         await fulfillment(of: [started], timeout: 2)
         PushRegistrationURLProtocol.onRequest = nil
@@ -275,18 +250,71 @@ final class PushAutomaticRegistrationTests: XCTestCase {
             (2, "other", .fcm("A")), (2, "other", .fid("A"))
         ]
         for (customer, project, token) in configurations {
-            await configureFirebase(project: project)
             let service = service(customer: customer)
-            service.setToken(token)
+            service.setToken(token, firebaseProjectId: project)
             try connect(service)
             _ = try await service.registerNotificationCategories(["orders"])
+            XCTAssertEqual(PushRegistrationURLProtocol.lastBody?["type"] as? String, project)
+            XCTAssertEqual(PushRegistrationURLProtocol.lastBody?["token"] as? String, token.fcmValue)
+            XCTAssertEqual(PushRegistrationURLProtocol.lastBody?["fid"] as? String, token.fidValue)
+        }
+        XCTAssertEqual(PushRegistrationURLProtocol.count, configurations.count)
+    }
+
+    func testEmptyProjectIDFailsWithoutRequestAndCanBeCorrected() async throws {
+        let service = service()
+        try connect(service)
+        for project in ["", " \n\t "] {
+            service.setToken(.fcm("A"), firebaseProjectId: project)
+            do {
+                _ = try await service.registerNotificationCategories(["orders"])
+                XCTFail("Expected an empty project ID error")
+            } catch {
+                XCTAssertEqual(error as? PushServiceError, .emptyFirebaseProjectID)
+            }
+        }
+        XCTAssertEqual(PushRegistrationURLProtocol.count, 0)
+
+        service.setToken(.fcm("A"), firebaseProjectId: "corrected-project")
+        _ = try await service.registerNotificationCategories(["orders"])
+        XCTAssertEqual(PushRegistrationURLProtocol.count, 1)
+        XCTAssertEqual(PushRegistrationURLProtocol.lastBody?["type"] as? String, "corrected-project")
+    }
+
+    func testProjectIDIsTrimmedForRequestAndCachedRegistration() async throws {
+        let service = service()
+        service.setToken(.fcm("A"), firebaseProjectId: " \n project-id \t ")
+        try connect(service)
+        _ = try await service.registerNotificationCategories(["orders"])
+        XCTAssertEqual(PushRegistrationURLProtocol.lastBody?["type"] as? String, "project-id")
+
+        service.setToken(.fcm("A"), firebaseProjectId: "project-id")
+        _ = try await service.registerNotificationCategories(["orders"])
+        XCTAssertEqual(PushRegistrationURLProtocol.count, 1)
+    }
+
+    func testTokenAndProjectUpdatesOnSameServiceCauseMatchingRequests() async throws {
+        let service = service()
+        try connect(service)
+        let configurations: [(PushToken, String)] = [
+            (.fcm("A"), "first-project"),
+            (.fcm("A"), "second-project"),
+            (.fid("B"), "third-project")
+        ]
+        for (token, project) in configurations {
+            service.setToken(token, firebaseProjectId: project)
+            let registeredToken = try await service.registerNotificationCategories(["orders"])
+            XCTAssertEqual(registeredToken, token)
+            XCTAssertEqual(PushRegistrationURLProtocol.lastBody?["type"] as? String, project)
+            XCTAssertEqual(PushRegistrationURLProtocol.lastBody?["token"] as? String, token.fcmValue)
+            XCTAssertEqual(PushRegistrationURLProtocol.lastBody?["fid"] as? String, token.fidValue)
         }
         XCTAssertEqual(PushRegistrationURLProtocol.count, configurations.count)
     }
 
     func testGlobalCallbackReportsRotatedTokenButNotCachedList() async throws {
         let service = service()
-        service.setToken(.fcm("A"))
+        service.setToken(.fcm("A"), firebaseProjectId: "test-firebase")
         try connect(service)
         _ = try await service.registerNotificationCategories(["orders"])
         let updated = expectation(description: "Updated token reported")
@@ -294,7 +322,7 @@ final class PushAutomaticRegistrationTests: XCTestCase {
             XCTAssertEqual(try? result.get(), .fcm("B"))
             updated.fulfill()
         }
-        service.setToken(.fcm("B"))
+        service.setToken(.fcm("B"), firebaseProjectId: "test-firebase")
         await fulfillment(of: [updated], timeout: 2)
         let cached = expectation(description: "Cached list emits no event")
         cached.isInverted = true
@@ -343,6 +371,7 @@ final class PushRegistrationURLProtocol: URLProtocol {
     private static let lock = NSLock()
     private static var bodies: [[String: Any]] = []
     static var count: Int { lock.withLock { bodies.count } }
+    static var lastBody: [String: Any]? { lock.withLock { bodies.last } }
     static var lastCategories: [String]? { lock.withLock { bodies.last?["categories"] as? [String] } }
     private static var responseStatus = 204
     static var statusCode: Int {

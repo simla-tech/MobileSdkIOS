@@ -1,4 +1,4 @@
-# RetailCRM iOS SDK
+RetailCRM iOS SDK
 
 SDK позволяет подключить к iOS-приложению онлайн-консультант, трекинг действий клиентов,
 товарные рекомендации и push-уведомления.
@@ -29,7 +29,7 @@ Swift-модуль / CocoaPods - Назначение
 `OnlineConsultant` / `SimlaOnlineConsultant` - Онлайн-консультант 
 `Tracker` / `SimlaTracker` - Трекинг действий клиентов 
 `Recommendations` / `SimlaRecommendations` - Товарные рекомендации 
-`PushService` / `SimlaPushService` - Firebase push-уведомления, при управлении Firebase и делегатами со стороны приложения
+`PushService` / `SimlaPushService` - Регистрация FCM/FID и обработка push-уведомлений;
 `PushNotificationExtension` / `SimlaPushNotificationExtension` - Обработка уведомлений в Notification Service Extension 
 
 Модули используют общую сессию `Core`.
@@ -42,7 +42,7 @@ Swift-модуль / CocoaPods - Назначение
 - Для использования онлайн-консультанта в RetailCRM должен быть подключён модуль
   «Онлайн-консультант».
 - Для рекомендаций нужна настроенная механика рекомендаций в RetailCRM.
-- Для Firebase push-уведомлений нужны настройки Firebase и APNs в приложении.
+- Для push-уведомлений приложение самостоятельно подключает и настраивает Firebase и APNs, затем передаёт SDK готовый FCM-токен или FID вместе с Firebase project ID.
 
 ## Подключение
 
@@ -150,7 +150,7 @@ end
 `.xcworkspace`. Блок расширения нужен только при наличии Notification Service Extension.
 
 При прямом Git-подключении внутренние модули `SimlaSDKConfiguration` и `SimlaSQLiteStorage` тоже перечисляются с `sdk_source`.
-Firebase-зависимости CocoaPods получает из публичного каталога.
+Firebase не входит в зависимости SDK. Для push-уведомлений подключите Firebase к приложению отдельно — см. [инструкцию по push-уведомлениям](./push-firebase.md#подключение).
 
 ## Инициализация
 

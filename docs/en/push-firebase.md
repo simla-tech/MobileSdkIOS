@@ -1,6 +1,8 @@
-# Push notifications through Firebase
+# Push notifications
 
-The `push-firebase` module integrates Simla push notifications through Firebase Cloud Messaging: device registration, notification display, and status reporting.
+The `PushService` module registers application-supplied push tokens and notification categories with the server,
+handles Simla notifications, and reports notification interaction statuses.
+The application configures Firebase and APNs, obtains an FCM token or FID, and supplies it to the SDK together with the Firebase project ID.
 
 ## Contents
 
@@ -8,7 +10,7 @@ The `push-firebase` module integrates Simla push notifications through Firebase 
 - [Setup](#setup)
 - [Customer identification](#customer-identification)
 - [Providing a device token](#providing-a-device-token)
-- [Registering a push token and categories](#registering-a-push-token-and-categories)
+- [Registering categories](#registering-categories)
 - [Handling notifications](#handling-notifications)
 - [Handling notifications when the application is in the background or closed](#handling-notifications-when-the-application-is-in-the-background-or-closed)
 - [Navigation and notification data](#navigation-and-notification-data)
@@ -41,9 +43,20 @@ See the [role description in the Firebase documentation](https://firebase.google
 
 ## Setup
 
-Configure Firebase in the application using the [Firebase instructions](https://firebase.google.com/docs/ios/setup).
+Add the required Firebase modules directly to the application and configure Firebase using the [official instructions](https://firebase.google.com/docs/ios/setup).
+The application configures Firebase, obtains an FCM token or Firebase Installation ID, registers with APNs, and assigns notification delegates.
+Supply the FCM token or FID together with the Firebase project ID through `setToken(_:firebaseProjectId:)` and notification categories through `registerNotificationCategories(_:completion:)`.
 
-Call `configurePush()` immediately after `CrmSdk.initialize(...)`. Registration waits for the session and token.
+Registration waits until all conditions are met:
+
+- Categories have been supplied through `registerNotificationCategories(_:completion:)`.
+- A nonempty token has been supplied through `setToken(_:firebaseProjectId:)`.
+- The SDK session is connected with a customer identifier.
+
+The calls can arrive in either order: registration starts automatically when all required data is available.
+
+Call `configurePush()` immediately after `CrmSdk.initialize(...)`.
+Registration waits for categories, a token with its project ID, and a connected session with a customer identifier.
 
 ```swift
 
@@ -74,11 +87,6 @@ private func configurePush() {
 }
 ```
 
-The application configures Firebase, obtains an FCM token or Firebase Installation ID, registers with APNs, and assigns notification delegates.
-
-Firebase must be configured before all conditions for applying the subscription are met.
-To register a token, the SDK reads the Firebase project ID from `FirebaseApp.app()?.options.projectID`.
-
 ## Customer identification
 
 Notify the SDK of sign-in, account changes, and sign-out through `CrmSdk.shared.setCustomerIdentity(...)`.
@@ -86,17 +94,19 @@ See [Customer identification](./sdk.md#customer-identification).
 
 ## Providing a device token
 
-Pass the device token through `setToken(_:)`. For FCM, assign `Messaging.messaging().delegate = self` in `AppDelegate` after configuring Firebase and calling `CrmSdk.initialize`.
-Use the appropriate token retrieval variant:
+Pass an FCM token or FID together with the project ID through `setToken(_:firebaseProjectId:)` on the main actor.
+Assign `Messaging.messaging().delegate = self` after configuring Firebase, initializing the SDK, and assigning `onPushRegistrationResult`.
+Supply the current value on each application launch and whenever the token changes.
+
+For FCM, use the following handler:
 
 ```swift
 import UIKit
 import Core
 import PushService
+import FirebaseCore
 import FirebaseMessaging
-import FirebaseInstallations
 
-// When using FCM
 extension AppDelegate: MessagingDelegate {
     nonisolated func messaging(
         _ messaging: Messaging,
@@ -104,89 +114,69 @@ extension AppDelegate: MessagingDelegate {
     ) {
         guard let fcmToken, !fcmToken.isEmpty else { return }
         Task { @MainActor in
-            CrmSdk.shared.pushService.setToken(.fcm(fcmToken))
-        }
-    }
-}
-
-// When using FID
-extension AppDelegate {
-    func application(
-        _ application: UIApplication,
-        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
-    ) {
-        Messaging.messaging().apnsToken = deviceToken
-
-        Messaging.messaging().register { error in
-            guard error == nil else {
-                // Handle the registration error.
+            guard let projectID = FirebaseApp.app()?.options.projectID else {
+                print("Firebase project ID is missing")
                 return
             }
-
-            Installations.installations().installationID { installationId, error in
-                guard error == nil, let installationId else {
-                    // Handle the FID retrieval error.
-                    return
-                }
-                Task { @MainActor in
-                    CrmSdk.shared.pushService.setToken(.fid(installationId))
-                }
-            }
+            CrmSdk.shared.pushService.setToken(.fcm(fcmToken), firebaseProjectId: projectID)
         }
     }
 }
 ```
 
-Instead of `pushService.setToken()`, you can call `pushService.setDeviceToken(_:completion:)` to have the SDK obtain an FCM token or Firebase Installation ID through Firebase.
-The method assigns `Messaging.messaging().apnsToken = deviceToken`.
-If Firebase Installation ID is enabled, the SDK calls `Messaging.messaging().register(...)` and retrieves the FID through `Installations.installations().installationID(...)`; otherwise, it requests an FCM token through `Messaging.messaging().token(...)`.
+For FID, set `FirebaseMessagingInstallationIdEnabled = YES` in the application's `Info.plist` and use this handler instead of the FCM variant above:
+
+```swift
+extension AppDelegate: MessagingDelegate {
+    nonisolated func messaging(
+        _ messaging: Messaging,
+        didReceiveRegistration installationId: String?
+    ) {
+        guard let installationId, !installationId.isEmpty else { return }
+        Task { @MainActor in
+            guard let projectID = FirebaseApp.app()?.options.projectID else {
+                print("Firebase project ID is missing")
+                return
+            }
+            CrmSdk.shared.pushService.setToken(.fid(installationId), firebaseProjectId: projectID)
+        }
+    }
+}
+```
+
+The application registers with APNs and associates the APNs token with Firebase:
 
 ```swift
 func application(
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
 ) {
-    CrmSdk.shared.pushService.setDeviceToken(deviceToken) { result in
-        switch result {
-        case .success(let token):
-            print("Token: \(token)")
-        case .failure(let error):
-            print("Failed to retrieve the token: \(error)")
-        }
-    }
+    Messaging.messaging().apnsToken = deviceToken
 }
 ```
 
-Differences between the methods:
-
-- `setToken` stores the supplied value in memory and starts applying the subscription when categories and the session are ready.
-- `setDeviceToken` additionally passes the APNs token to Firebase and retrieves an FCM token or FID, which it then uses for registration.
-
-When using only `setToken`, the application is responsible for configuring Firebase, registering with APNs, and associating the APNs token with Firebase.
-For FID, the application must also perform Firebase Messaging registration, which the SDK calls in `setDeviceToken`.
-
-## Registering a push token and categories
+## Registering categories
 
 Use `registerNotificationCategories(_:completion:)` to register a push token and CRM notification categories.
 
 The method performs the following steps:
 
 1. Removes duplicates and sorts codes: `["news", "sale", "news"]` becomes `["news", "sale"]`.
-2. Immediately stores the desired list in memory and UserDefaults. The confirmed list and parameter fingerprint are saved in `UserDefaults` after a successful server response, separately for each `siteToken`. The fingerprint includes the token, customer identifiers, Firebase project, and categories. Matching parameters prevent duplicate requests, including after an application restart. This check applies to registration and unsubscription; category order and duplicate codes do not affect comparison.
+2. Immediately stores the desired list in memory and a local SQLite database. The confirmed list and parameter fingerprint are saved in the same database after a successful server response, separately for each `siteToken`. The fingerprint includes the token, customer identifiers, Firebase project, and categories. Matching parameters prevent duplicate requests, including after an application restart. This check applies to registration and unsubscription; category order and duplicate codes do not affect comparison.
 3. Updates categories in `UNUserNotificationCenter`: creates categories with the same identifiers, no buttons, and `.customDismissAction` to handle dismissals. Previously SDK-managed categories absent from the new list are removed. Other application categories are preserved, but a matching identifier causes the category to be replaced.
-4. Waits for a valid push token and a connected session with a customer identifier, then checks the Firebase project ID.
+4. Waits for a valid push token supplied through `setToken(_:firebaseProjectId:)` and a connected session with a customer identifier. It then validates the supplied project ID: an empty or whitespace-only value produces `emptyFirebaseProjectID` without a server request.
 5. Sends the category list, token, and customer identifiers to the server. If a different list arrives before the request starts, the previous pending call completes with `PushServiceError.operationSuperseded`.
 
 The application maintains the current CRM notification category list and passes it on every launch and subscription change.
 Pass `[]` to disable subscriptions, or the desired categories to enable them.
-The SDK applies the current category list when the token, categories, or session state changes.
+The SDK applies the current category list when the token, project ID, categories, or session state changes.
 Automatic registration does not occur until the first `registerNotificationCategories` call in the current run.
 
 On failure, the supplied list and local categories are retained; the confirmed list remains unchanged.
 Before sending a new request, the previous fingerprint is cleared: the server may have processed a request even if it returned an error.
 There are no timer-based retries: another attempt can occur on a new token or session event, or another call to `registerNotificationCategories`.
 
-On the main thread, assign a result handler and supply the current category list and token.
+On the main actor, assign a result handler and supply the current category list and token together with the project ID.
 The SDK performs registration automatically.
 The method saves data on the Online Consultant backend.
 The backend transfers registered tokens and categories to Simla through a background job at the start of each hour.
@@ -430,11 +420,10 @@ pushService.onNotificationOpen = { action in
 - `onStatusRetryUpdate: ((PushStatusRetryUpdate) -> Void)?` — reports queued push statuses, retry requests, scheduled attempts, success, and retry termination off the main thread. Assignment emits `pending` snapshots for existing entries of the current site. Initial requests that never enter the retry queue are not published. Assign `nil` to unsubscribe. Events and their parameters are described in [Push notification analytics](#push-notification-analytics).
 - `onPushRegistrationResult: ((Result<PushToken, PushServiceError>) -> Void)?` — reports registration or unsubscription results on the main thread, including parameter validation errors. The event is not emitted when assigning the handler, skipping an already confirmed state, or replacing a pending call with `operationSuperseded`. Success confirms server acceptance of the parameters, not notification delivery.
 - `registerNotificationCategories(_:)` accepts the complete desired list of CRM category codes. Call it on every application launch and subscription change. An empty list `[]` unsubscribes from all categories. The SDK waits for a valid token and a connected session with a customer identifier; it checks the Firebase project ID before sending. The SDK registers matching iOS categories with `.customDismissAction` and removes previously managed categories absent from the new list. Other application categories are preserved. If a code matches an application category, the SDK replaces that category and its actions. Use distinct codes. Removing an iOS category does not block notification delivery or change system authorization. The method is available as `async throws -> PushToken` and with `completion: (Result<PushToken, PushServiceError>) -> Void`. It returns after local categories are updated and the server accepts the parameters, a saved confirmation is used, or an error occurs.
-- `setToken(_ token: PushToken)` — accepts `.fcm(String)` or `.fid(String)`.
-- `setDeviceToken(_:) async throws -> PushToken` and the `completion` variant — accept an APNs token and obtain an FCM token or Firebase Installation ID through Firebase.
+- `setToken(_ token: PushToken, firebaseProjectId: String)` — accepts `.fcm(String)` or `.fid(String)` together with the Firebase project ID. Stores both values in memory; updating the token or project ID triggers a registration check when categories and a session with a customer identifier are ready. An empty project ID produces `emptyFirebaseProjectID` once the other data is ready. The method returns no result; registration errors arrive through `onPushRegistrationResult` and a pending `registerNotificationCategories` call.
 - `handleWillPresent(_:withCompletionHandler:completion:) -> Bool` — reports `.delivered` for a notification received while the application is open.
 - `handleDidReceive(_:withCompletionHandler:completion:) -> Bool` — reports `.clicked` or `.swiped` for a user action.
-- `onNotificationOpen: ((NotificationAction) -> Void)?` — passes the original navigation string (`urlString`) to the application. Tapping the notification provides the navigation link and custom attributes if specified. Tapping a button provides only the navigation link. The SDK does not open the link.
+- `onNotificationOpen: ((NotificationAction) -> Void)?` — passes the original navigation string (`urlString`) to the application. For notification taps, `urlString` contains the navigation string; for button taps, it contains the button's `value`. Notification attributes are supplied through `customAttributes`, when available, in both cases. Dismissing a notification does not invoke the handler. The application performs navigation.
 - `handleSilentNotification(_:fetchCompletionHandler:completion:) -> Bool` — reports `.delivered` for a silent Simla notification.
 - `PushService.version: String` — module version.
 
@@ -458,10 +447,10 @@ for automatic retry. There are up to five total attempts with delays of `10`, `2
 seconds; `Retry-After` may extend the delay. The original `changed_at` and `button_hash` are preserved.
 Other HTTP errors and encoding failures are not retried.
 
-Queue entries are serialized as JSON in `UserDefaults.standard`, separately for the application
-and notification extension. Retries run while the respective process is active and the network is
-available. After termination, the queue resumes when
-`PushService` or `PushNotificationHandler` is created in that process. iOS does not guarantee retries
+The SDK saves statuses awaiting retry in a local SQLite database.
+Retries run while the process hosting the SDK handler is active and the network is available.
+When `PushService` or `PushNotificationHandler` is created again, the SDK resumes processing the persisted queue available to it.
+iOS does not guarantee retries
 while the application is suspended or the extension has terminated.
 
 `completion` is called once with the first attempt's result, after a transient failure is saved to
@@ -509,13 +498,14 @@ Public `PushService` operations pass this type to `completion`. Denial of notifi
 - `authorizationDenied` — the user denied notification authorization.
 - `operationSuperseded` — a pending call was replaced by another category list before the request started.
 - `emptyPushToken` — the push token is missing; `registerNotificationCategories` waits for it to become available before sending.
-- `emptyFCMToken`, `emptyFID`, `firebaseMessaging(Error)`, `firebaseInstallations(Error)`, `emptyFirebaseProjectID`, `firebaseInstallationIDDisabled` — token retrieval and Firebase configuration errors.
+- `emptyFCMToken`, `emptyFID` — an empty FCM token or FID. Registration waits for a valid token.
+- `emptyFirebaseProjectID` — the supplied project ID is empty after trimming whitespace and newlines. Once the other data is ready, the error arrives through `onPushRegistrationResult` and a pending `registerNotificationCategories` call (`completion` or the async version's `catch`); no server request is sent. The application handles Firebase configuration and token retrieval errors.
 - `invalidHTTPResponse(String)`, `requestEncodingFailed(String)`, `requestFailed(String)`, `httpStatus(Int, [String])` — server token registration errors.
 - `statusReporting(StatusReportingFailure)` — status reporting failure: `requestEncodingFailed(String)`, `invalidHTTPResponse(String)`, `requestFailed(String)`, or `httpStatus(Int, [String])`.
 
 ## AppDelegate implementation example
 
-This example starts the SDK without a customer identity. After the customer signs in, call `CrmSdk.shared.setCustomerIdentity(_:)` and wait for successful completion.
+This example uses FCM tokens. Firebase is added to and configured in the application. The SDK starts without a customer identity. After the customer signs in, call `CrmSdk.shared.setCustomerIdentity(_:)` and wait for successful completion.
 Provide `customerId`, or `siteCustomerId` together with `siteCode`.
 Until a customer identifier is supplied, push subscription registration waits for session readiness.
 See [Customer identification](./sdk.md#customer-identification).
@@ -524,6 +514,8 @@ See [Customer identification](./sdk.md#customer-identification).
 import UIKit
 import Core
 import FirebaseCore
+import FirebaseMessaging
+import UserNotifications
 import PushService
 
 @main
@@ -538,14 +530,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        CrmSdk.shared.pushService.setDeviceToken(deviceToken) { result in
-            switch result {
-            case .success(let token):
-                print("Token: \(token)")
-            case .failure(let error):
-                print("Failed to retrieve the token: \(error)")
-            }
-        }
+        Messaging.messaging().apnsToken = deviceToken
     }
 
     func application(
@@ -576,8 +561,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     private func configureServices(_ application: UIApplication) {
         self.firebaseConfigure()
-        self.registerNootificationCenter(application)
         self.configureCrmSdk()
+        Messaging.messaging().delegate = self
+        self.registerNootificationCenter(application)
     }
 
     private func firebaseConfigure() {
@@ -632,6 +618,23 @@ private extension AppDelegate {
             if case let .failure(error) = result, error != .operationSuperseded {
                 print("Could not apply push categories: \(error.localizedDescription)")
             }
+        }
+    }
+}
+
+// MessagingDelegate
+extension AppDelegate: MessagingDelegate {
+    nonisolated func messaging(
+        _ messaging: Messaging,
+        didReceiveRegistrationToken fcmToken: String?
+    ) {
+        guard let fcmToken, !fcmToken.isEmpty else { return }
+        Task { @MainActor in
+            guard let projectID = FirebaseApp.app()?.options.projectID else {
+                print("Firebase project ID is missing")
+                return
+            }
+            CrmSdk.shared.pushService.setToken(.fcm(fcmToken), firebaseProjectId: projectID)
         }
     }
 }

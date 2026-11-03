@@ -36,11 +36,8 @@ public enum PushServiceError: Error, Equatable, LocalizedError, Sendable {
     /// Firebase installation ID is empty after trimming whitespace.
     case emptyFID
 
-    /// Firebase project ID is unavailable from configured Firebase options.
+    /// The Firebase project ID supplied by the application is empty after trimming whitespace.
     case emptyFirebaseProjectID
-
-    /// Firebase Messaging installation ID delivery is disabled in app configuration.
-    case firebaseInstallationIDDisabled
 
     /// Customer ID or external customer ID is missing.
     case missingCustomerIdentifier
@@ -60,12 +57,6 @@ public enum PushServiceError: Error, Equatable, LocalizedError, Sendable {
     /// Reporting a notification status to the backend failed.
     case statusReporting(StatusReportingFailure)
 
-    /// Firebase Messaging registration or FCM token retrieval failed.
-    case firebaseMessaging(Error)
-
-    /// Firebase Installations failed to provide an installation ID.
-    case firebaseInstallations(Error)
-
     /// Localized human-readable error description.
     public var errorDescription: String? {
         switch self {
@@ -81,14 +72,8 @@ public enum PushServiceError: Error, Equatable, LocalizedError, Sendable {
             return PushLocalization.emptyFCMToken.localized
         case .emptyFID:
             return PushLocalization.emptyFID.localized
-        case let .firebaseMessaging(error):
-            return error.localizedDescription
-        case let .firebaseInstallations(error):
-            return error.localizedDescription
         case .emptyFirebaseProjectID:
             return PushLocalization.emptyFirebaseProjectID.localized
-        case .firebaseInstallationIDDisabled:
-            return PushLocalization.firebaseInstallationIDDisabled.localized
         case .missingCustomerIdentifier:
             return PushLocalization.missingCustomerIdentifier.localized
         case .invalidHTTPResponse(let responseDescription):
@@ -138,16 +123,12 @@ public enum PushServiceError: Error, Equatable, LocalizedError, Sendable {
             return leftCode == rightCode && leftMessages == rightMessages
         case let (.statusReporting(left), .statusReporting(right)):
             return left == right
-        case let (.firebaseMessaging(left), .firebaseMessaging(right)),
-             let (.firebaseInstallations(left), .firebaseInstallations(right)):
-            return (left as NSError) == (right as NSError)
         case (.operationSuperseded, .operationSuperseded),
              (.authorizationDenied, .authorizationDenied),
              (.emptyPushToken, .emptyPushToken),
              (.emptyFCMToken, .emptyFCMToken),
              (.emptyFID, .emptyFID),
              (.emptyFirebaseProjectID, .emptyFirebaseProjectID),
-             (.firebaseInstallationIDDisabled, .firebaseInstallationIDDisabled),
              (.missingCustomerIdentifier, .missingCustomerIdentifier):
             return true
         default:

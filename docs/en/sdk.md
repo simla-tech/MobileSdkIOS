@@ -1,4 +1,4 @@
-# Simla iOS SDK
+Simla iOS SDK
 
 The SDK adds online chat, customer activity tracking, product recommendations, and push notifications to an iOS application.
 
@@ -28,7 +28,7 @@ Swift module / CocoaPods — Purpose
 `OnlineConsultant` / `SimlaOnlineConsultant` — Online chat
 `Tracker` / `SimlaTracker` — Customer activity tracking
 `Recommendations` / `SimlaRecommendations` — Product recommendations
-`PushService` / `SimlaPushService` — Firebase push notifications, with Firebase and delegates managed by the application
+`PushService` / `SimlaPushService` — FCM/FID registration and push notification handling;
 `PushNotificationExtension` / `SimlaPushNotificationExtension` — Notification processing in a Notification Service Extension
 
 The modules share the `Core` session.
@@ -40,7 +40,7 @@ The modules share the `Core` session.
 - iOS 15 or later.
 - Online chat requires the Online Consultant module to be enabled in Simla.
 - Recommendations require a configured recommendation mechanic in Simla.
-- Firebase push notifications require Firebase and APNs to be configured in the application.
+- For push notifications, the application adds and configures Firebase and APNs, then supplies an FCM token or FID together with the Firebase project ID.
 
 ## Installation
 
@@ -148,7 +148,7 @@ Replace the target names with those in your project, run `pod install`, and open
 `.xcworkspace`. The extension block is required only when a Notification Service Extension is present.
 
 Direct Git integration also requires listing the internal `SimlaSDKConfiguration` and `SimlaSQLiteStorage` pods with `sdk_source`.
-CocoaPods resolves Firebase dependencies from the public specification repository.
+Firebase is not an SDK dependency. For push notifications, add Firebase to the application separately — see [Push notifications](./push-firebase.md#setup).
 
 ## Initialization
 

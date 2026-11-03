@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		02CB27B609B3626593505F2D /* Tracker in Frameworks */ = {isa = PBXBuildFile; productRef = 67B83A8ECAC7A5575B06B0C4 /* Tracker */; };
+		B10000000000000000000001 /* PushAutomaticRegistrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* PushAutomaticRegistrationTests.swift */; };
+		B10000000000000000000002 /* PushRetryTestStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* PushRetryTestStorage.swift */; };
+		B10000000000000000000003 /* PushNotificationExtensionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* PushNotificationExtensionTests.swift */; };
 		1AADD611B44EF6C81F682CBB /* PushNotificationExtension in Frameworks */ = {isa = PBXBuildFile; productRef = D183B355DAC88B7EB2FB551B /* PushNotificationExtension */; };
 		38FA55A3BC2B84134D4A1886 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F8632565F5F7EAB2794205A /* Foundation.framework */; };
 		543D823AF26974A4D00CF51A /* PushService in Frameworks */ = {isa = PBXBuildFile; productRef = 45ACC1787670061C752C3E32 /* PushService */; };
 		64BDBBAEF49BDFC683A01130 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F8632565F5F7EAB2794205A /* Foundation.framework */; };
-		786719188C23584F20D8702F /* OnlineConsultant in Frameworks */ = {isa = PBXBuildFile; productRef = 1B6C2AAD539A674FDAB6E4BE /* OnlineConsultant */; };
-		80849B6116D0EAAD827024C8 /* Recommendations in Frameworks */ = {isa = PBXBuildFile; productRef = 1DAB5AE6AF685EAD130AB917 /* Recommendations */; };
 		8E563B4B2F4FE9A34C642957 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39387EBDC6CFD3F8128FFAA8 /* AppDelegate.swift */; };
 		A4D3D38164EC59CE5E35AD81 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = D0F4389E886DEE49A71A6EDF /* Core */; };
 /* End PBXBuildFile section */
@@ -29,21 +29,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		F10000000000000000000001 /* PushAutomaticRegistrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushServiceTests/PushAutomaticRegistrationTests.swift; sourceTree = "<group>"; };
+		F10000000000000000000002 /* PushRetryTestStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushServiceTests/PushRetryTestStorage.swift; sourceTree = "<group>"; };
+		F10000000000000000000003 /* PushNotificationExtensionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationExtensionTests/PushNotificationExtensionTests.swift; sourceTree = "<group>"; };
 		39387EBDC6CFD3F8128FFAA8 /* AppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		3F8632565F5F7EAB2794205A /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		51C8B1FAA271C1927DDBB8FB /* SDKTestHost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SDKTestHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9EAB79354B91B996B8A320F3 /* SDKHostedTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SDKHostedTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		9D6D2C628BC031B8A31FC4B6 /* ../Tests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
-			path = ../Tests;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		D3327ECC0B17D564DE51EBD3 /* Frameworks */ = {
@@ -52,11 +45,8 @@
 			files = (
 				64BDBBAEF49BDFC683A01130 /* Foundation.framework in Frameworks */,
 				A4D3D38164EC59CE5E35AD81 /* Core in Frameworks */,
-				786719188C23584F20D8702F /* OnlineConsultant in Frameworks */,
 				543D823AF26974A4D00CF51A /* PushService in Frameworks */,
 				1AADD611B44EF6C81F682CBB /* PushNotificationExtension in Frameworks */,
-				80849B6116D0EAAD827024C8 /* Recommendations in Frameworks */,
-				02CB27B609B3626593505F2D /* Tracker in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +61,16 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9D6D2C628BC031B8A31FC4B6 /* ../Tests */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000001 /* PushAutomaticRegistrationTests.swift */,
+				F10000000000000000000002 /* PushRetryTestStorage.swift */,
+				F10000000000000000000003 /* PushNotificationExtensionTests.swift */,
+			);
+			path = ../Tests;
+			sourceTree = "<group>";
+		};
 		1E1EF0A52643A2DAF1C2CCDB /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -139,17 +139,11 @@
 			dependencies = (
 				6768940FEFA3142381C189A9 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				9D6D2C628BC031B8A31FC4B6 /* ../Tests */,
-			);
 			name = SDKHostedTests;
 			packageProductDependencies = (
 				D0F4389E886DEE49A71A6EDF /* Core */,
-				1B6C2AAD539A674FDAB6E4BE /* OnlineConsultant */,
 				45ACC1787670061C752C3E32 /* PushService */,
 				D183B355DAC88B7EB2FB551B /* PushNotificationExtension */,
-				1DAB5AE6AF685EAD130AB917 /* Recommendations */,
-				67B83A8ECAC7A5575B06B0C4 /* Tracker */,
 			);
 			productName = SDKHostedTests;
 			productReference = 9EAB79354B91B996B8A320F3 /* SDKHostedTests.xctest */;
@@ -210,6 +204,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B10000000000000000000001 /* PushAutomaticRegistrationTests.swift in Sources */,
+				B10000000000000000000002 /* PushRetryTestStorage.swift in Sources */,
+				B10000000000000000000003 /* PushNotificationExtensionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,7 +239,6 @@
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -package-name sdk";
 				PRODUCT_BUNDLE_IDENTIFIER = tech.retailcrm.SDKHostedTests;
 				SDKROOT = iphoneos;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -315,7 +311,6 @@
 				CODE_SIGNING_ALLOWED = NO;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_FirebaseAppDelegateProxyEnabled = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -339,7 +334,6 @@
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -package-name sdk";
 				PRODUCT_BUNDLE_IDENTIFIER = tech.retailcrm.SDKHostedTests;
 				SDKROOT = iphoneos;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -420,7 +414,6 @@
 				CODE_SIGNING_ALLOWED = NO;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_FirebaseAppDelegateProxyEnabled = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -476,25 +469,10 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		1B6C2AAD539A674FDAB6E4BE /* OnlineConsultant */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F9EAD997E6754EFA0964A50F /* XCLocalSwiftPackageReference ".." */;
-			productName = OnlineConsultant;
-		};
-		1DAB5AE6AF685EAD130AB917 /* Recommendations */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F9EAD997E6754EFA0964A50F /* XCLocalSwiftPackageReference ".." */;
-			productName = Recommendations;
-		};
 		45ACC1787670061C752C3E32 /* PushService */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F9EAD997E6754EFA0964A50F /* XCLocalSwiftPackageReference ".." */;
 			productName = PushService;
-		};
-		67B83A8ECAC7A5575B06B0C4 /* Tracker */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F9EAD997E6754EFA0964A50F /* XCLocalSwiftPackageReference ".." */;
-			productName = Tracker;
 		};
 		D0F4389E886DEE49A71A6EDF /* Core */ = {
 			isa = XCSwiftPackageProductDependency;

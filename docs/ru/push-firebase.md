@@ -1,7 +1,8 @@
-# Push-уведомления через Firebase
+# Push-уведомления
 
-Модуль `push-firebase` подключает push-уведомления RetailCRM через Firebase Cloud Messaging:
-регистрацию устройства, отображение уведомлений и отправку статусов.
+Модуль `PushService` регистрирует переданные приложением push-токены и категории уведомлений на сервере,
+обрабатывает уведомления RetailCRM и отправляет статусы взаимодействия с ними.
+Приложение самостоятельно настраивает Firebase и APNs, получает FCM-токен или FID и передаёт его SDK вместе с Firebase project ID.
 
 ## Оглавление
 
@@ -9,7 +10,7 @@
 - [Подключение](#подключение)
 - [Идентификация клиента](#идентификация-клиента)
 - [Передача токена устройства](#передача-токена-устройства)
-- [Регистрация push-токена и категорий](#регистрация-push-токена-и-категорий)
+- [Регистрация категорий](#регистрация-категорий)
 - [Обработка уведомлений](#обработка-уведомлений)
 - [Обработка уведомлений при свёрнутом или закрытом приложении](#обработка-уведомлений-при-свёрнутом-или-закрытом-приложении)
 - [Переходы и данные уведомления](#переходы-и-данные-уведомления)
@@ -45,8 +46,20 @@ Firebase [поддерживает](https://firebase.google.com/docs/cloud-messa
 
 ## Подключение
 
-Настройте Firebase в приложении по [инструкции Firebase](https://firebase.google.com/docs/ios/setup).
-Вызывайте `configurePush()` сразу после `CrmSdk.initialize(...)`. Регистрация ожидает готовности сессии и токена.
+Подключите необходимые модули Firebase непосредственно в приложение и настройте Firebase по [официальной инструкции](https://firebase.google.com/docs/ios/setup).
+Настройка Firebase, получение FCM-токена или Firebase Installation ID, регистрация в APNs и назначение делегатов уведомлений выполняются в приложении.
+Приложение передаёт готовый FCM-токен или FID вместе с идентификатором Firebase-проекта через `setToken(_:firebaseProjectId:)` и категории уведомлений через `registerNotificationCategories(_:completion:)`.
+
+Регистрация ждёт, пока будут выполнены все условия:
+
+- Переданы категории через `registerNotificationCategories(_:completion:)`.
+- Установлен непустой токен через `setToken(_:firebaseProjectId:)`.
+- Подключена сессия SDK с идентификатором клиента.
+
+Порядок вызовов не важен: когда появятся все данные, регистрация запустится автоматически.
+
+Вызывайте `configurePush()` сразу после `CrmSdk.initialize(...)`.
+Регистрация ожидает передачи категорий, токена с project ID и готовности сессии с идентификатором клиента.
 
 ```swift
 
@@ -77,11 +90,6 @@ private func configurePush() {
 }
 ```
 
-Настройка Firebase, получение FCM-токена или Firebase Installation ID, регистрация в APNs и назначение делегатов уведомлений выполняются в приложении.
-
-Firebase должен быть настроен до появления всех условий для применения подписки.
-Для регистрации токена, SDK получает идентификатор Firebase-проекта из `FirebaseApp.app()?.options.projectID`.
-
 ## Идентификация клиента
 
 Сообщайте SDK о входе, смене аккаунта и выходе клиента через `CrmSdk.shared.setCustomerIdentity(...)`.
@@ -89,18 +97,19 @@ Firebase должен быть настроен до появления всех
 
 ## Передача токена устройства
 
-Передайте токен устройства через `setToken(_:)`. Для FCM назначьте `Messaging.messaging().delegate = self`
-в `AppDelegate` после настройки Firebase и вызова `CrmSdk.initialize`.
-Используйте соответствующий вариант получения токена:
+Передайте FCM-токен или FID вместе с project ID через `setToken(_:firebaseProjectId:)` на главном акторе.
+Назначьте `Messaging.messaging().delegate = self` после настройки Firebase, инициализации SDK и назначения `onPushRegistrationResult`.
+Передавайте актуальное значение при каждом запуске приложения и обновлении токена.
+
+Для FCM используйте следующий обработчик:
 
 ```swift
 import UIKit
 import Core
 import PushService
+import FirebaseCore
 import FirebaseMessaging
-import FirebaseInstallations
 
-// При использовании FCM
 extension AppDelegate: MessagingDelegate {
     nonisolated func messaging(
         _ messaging: Messaging,
@@ -108,86 +117,67 @@ extension AppDelegate: MessagingDelegate {
     ) {
         guard let fcmToken, !fcmToken.isEmpty else { return }
         Task { @MainActor in
-            CrmSdk.shared.pushService.setToken(.fcm(fcmToken))
-        }
-    }
-}
-
-// При использовании FID
-extension AppDelegate {
-    func application(
-        _ application: UIApplication,
-        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
-    ) {
-        Messaging.messaging().apnsToken = deviceToken
-
-        Messaging.messaging().register { error in
-            guard error == nil else {
-                // Обработайте ошибку регистрации.
+            guard let projectID = FirebaseApp.app()?.options.projectID else {
+                print("Firebase project ID is missing")
                 return
             }
-
-            Installations.installations().installationID { installationId, error in
-                guard error == nil, let installationId else {
-                    // Обработайте ошибку получения FID.
-                    return
-                }
-                Task { @MainActor in
-                    CrmSdk.shared.pushService.setToken(.fid(installationId))
-                }
-            }
+            CrmSdk.shared.pushService.setToken(.fcm(fcmToken), firebaseProjectId: projectID)
         }
     }
 }
 ```
 
-Вместо вызова `pushService.setToken()` можно вызвать метод `pushService.setDeviceToken(_:completion:)`, чтобы SDK получил FCM-токен или Firebase Installation ID через Firebase.
-Метод присваивает `Messaging.messaging().apnsToken = deviceToken`.
-Если включён Firebase Installation ID, SDK вызывает `Messaging.messaging().register(...)` и получает FID через `Installations.installations().installationID(...)`, иначе запрашивает FCM-токен через `Messaging.messaging().token(...)`.
+Для FID включите `FirebaseMessagingInstallationIdEnabled = YES` в `Info.plist` приложения и используйте следующий обработчик вместо FCM-варианта выше:
+
+```swift
+extension AppDelegate: MessagingDelegate {
+    nonisolated func messaging(
+        _ messaging: Messaging,
+        didReceiveRegistration installationId: String?
+    ) {
+        guard let installationId, !installationId.isEmpty else { return }
+        Task { @MainActor in
+            guard let projectID = FirebaseApp.app()?.options.projectID else {
+                print("Firebase project ID is missing")
+                return
+            }
+            CrmSdk.shared.pushService.setToken(.fid(installationId), firebaseProjectId: projectID)
+        }
+    }
+}
+```
+Регистрация в APNs и связь APNs-токена с Firebase выполняются в приложении:
 
 ```swift
 func application(
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
 ) {
-    CrmSdk.shared.pushService.setDeviceToken(deviceToken) { result in
-        switch result {
-        case .success(let token):
-            print("Токен: \(token)")
-        case .failure(let error):
-            print("Не удалось получить токен: \(error)")
-        }
-    }
+    Messaging.messaging().apnsToken = deviceToken
 }
 ```
 
-Разница между методами:
-- setToken сохраняет переданное значение в памяти и запускает применение подписки, когда готовы категории и сессия.
-- setDeviceToken дополнительно передаёт APNs-токен в Firebase и получает FCM-токен либо FID, который затем использует для регистрации.
-При использовании только setToken приложение самостоятельно отвечает за настройку Firebase, регистрацию в APNs и связь APNs-токена с Firebase.
-Для FID также нужно самостоятельно выполнить регистрацию Firebase Messaging, которую SDK вызывает в setDeviceToken.
-
-## Регистрация push-токена и категорий
+## Регистрация категорий
 
 Для регистрации push-токена и категорий CRM уведомлений используйте метод `registerNotificationCategories(_:completion:)`.
 
 Метод выполняет следующие действия:
 1. Удаляет дубли и сортирует коды: ["news", "sale", "news"] превращается в ["news", "sale"].
-2. Сразу сохраняет желаемый список в памяти и UserDefaults. Подтверждённый список и отпечаток параметров сохраняются в `UserDefaults` после успешного ответа сервера, отдельно для каждого `siteToken`. Отпечаток учитывает токен, идентификаторы клиента, Firebase-проект и категории. При совпадении параметров запрос не повторяется, в том числе после перезапуска приложения. Проверка работает для регистрации и отписки; порядок категорий и дубли одинаковых кодов не влияют на сравнение.
+2. Сразу сохраняет желаемый список в памяти и локальной базе SQLite. Подтверждённый список и отпечаток параметров сохраняются в той же базе после успешного ответа сервера, отдельно для каждого `siteToken`. Отпечаток учитывает токен, идентификаторы клиента, Firebase-проект и категории. При совпадении параметров запрос не повторяется, в том числе после перезапуска приложения. Проверка работает для регистрации и отписки; порядок категорий и дубли одинаковых кодов не влияют на сравнение.
 3. Обновляет категории в UNUserNotificationCenter: создаёт категории с такими же идентификаторами, без кнопок и с .customDismissAction для обработки смахивания. Ранее управляемые SDK категории, отсутствующие в новом списке, удаляются. Другие категории приложения сохраняются, но при совпадении идентификатора категория будет заменена.
-4. Ждёт валидный push-токен и подключённую сессию с идентификатором клиента, затем проверяет Firebase project ID.
+4. Ждёт валидный push-токен, переданный через `setToken(_:firebaseProjectId:)`, и подключённую сессию с идентификатором клиента. Затем проверяет переданный project ID: пустое или состоящее из пробелов значение приводит к `emptyFirebaseProjectID` без запроса на сервер.
 5. Отправляет список категорий вместе с токеном и идентификаторами клиента на сервер. Если до начала запроса поступил другой список, прежний ожидающий вызов завершается с `PushServiceError.operationSuperseded`.
 
 Приложение само хранит актуальный список категорий CRM уведомлений и передаёт его при каждом запуске и изменении подписки.
 Для отключения передайте `[]`, для включения — нужные категории.
-SDK применяет актуальный список категорий при изменении токена, категорий и состояния сессии.
+SDK применяет актуальный список категорий при изменении токена, project ID, категорий и состояния сессии.
 До первого вызова `registerNotificationCategories` в текущем запуске автоматическая регистрация не выполняется.
 
 При ошибке, переданный список и локальные категории сохраняются, подтверждённый список не изменяется.
 Перед отправкой нового запроса старый отпечаток сбрасывается: если запрос завершился ошибкой, сервер мог успеть его обработать.
 Повторов по таймеру нет: следующая попытка возможна при новом событии токена или сессии либо повторном вызове `registerNotificationCategories`.
 
-На главном потоке назначьте обработчик результата, передайте актуальный список категорий и токен.
+На главном акторе назначьте обработчик результата, передайте актуальный список категорий и токен вместе с project ID.
 SDK выполнит регистрацию автоматически.
 Метод сохраняет данные на backend Онлайн-консультанта.
 Backend передаёт зарегистрированные токены и категории в RetailCRM фоновой задачей в начале каждого часа.
@@ -431,11 +421,10 @@ pushService.onNotificationOpen = { action in
 - `onStatusRetryUpdate: ((PushStatusRetryUpdate) -> Void)?` — сообщает вне главного потока о постановке push-статусов в очередь, начале повторных запросов, назначении следующей попытки, успехе и прекращении повторов. При назначении передаёт `pending` для уже ожидающих записей текущего сайта. Первоначальные запросы, не попавшие в очередь, не публикуются. Присвоение `nil` отключает подписку. События и их параметры описаны в разделе [«Аналитика push-уведомлений»](#аналитика-push-уведомлений).
 - `onPushRegistrationResult: ((Result<PushToken, PushServiceError>) -> Void)?` — сообщает на главном потоке результат регистрации или отписки, включая ошибки проверки параметров. При назначении обработчика, пропуске уже подтверждённого состояния и замене ожидающего вызова через `operationSuperseded` событие не вызывается. Успех подтверждает принятие параметров сервером, но не доставку уведомлений.
 - `registerNotificationCategories(_:)` принимает полный желаемый список кодов категорий CRM. Вызывайте метод при каждом запуске приложения и изменении подписки. Пустой список `[]` означает отписку от всех категорий. SDK ждёт валидный токен и подключённую сессию с идентификатором клиента; перед отправкой проверяет идентификатор Firebase-проекта. SDK регистрирует одноимённые категории iOS с `.customDismissAction` и удаляет ранее управляемые им категории, отсутствующие в новом списке. Остальные категории приложения сохраняются. Если код совпадает с категорией приложения, SDK заменит её вместе с действиями. Выбирайте непересекающиеся коды. Удаление категории iOS не блокирует доставку уведомлений и не меняет системное разрешение. Метод доступен как `async throws -> PushToken` и с `completion: (Result<PushToken, PushServiceError>) -> Void`. Результат возвращается после обновления локальных категорий и принятия параметров сервером, использования сохранённого подтверждения либо ошибки.
-- `setToken(_ token: PushToken)` — принимает `.fcm(String)` или `.fid(String)`.
-- `setDeviceToken(_:) async throws -> PushToken` и вариант с `completion` — принимает APNs-токен и получает через Firebase FCM-токен или Firebase Installation ID.
+- `setToken(_ token: PushToken, firebaseProjectId: String)` — принимает `.fcm(String)` или `.fid(String)` вместе с идентификатором Firebase-проекта. Сохраняет оба значения в памяти; смена токена или project ID запускает проверку регистрации при готовности категорий и сессии с идентификатором клиента. Пустой project ID приводит к `emptyFirebaseProjectID` при готовности остальных данных. Метод не возвращает результат; ошибки регистрации поступают в `onPushRegistrationResult` и ожидающий вызов `registerNotificationCategories`.
 - `handleWillPresent(_:withCompletionHandler:completion:) -> Bool` — отправляет `.delivered` для уведомления в открытом приложении.
 - `handleDidReceive(_:withCompletionHandler:completion:) -> Bool` — отправляет `.clicked` или `.swiped` при действии пользователя.
-- `onNotificationOpen: ((NotificationAction) -> Void)?` — передаёт приложению исходную строку перехода (`urlString`). При нажатии на уведомление это ссылка перехода и дополнительные параметры если они заданы. При нажатии на кнопку это только ссылка перехода. SDK не открывает ссылку.
+- `onNotificationOpen: ((NotificationAction) -> Void)?` — передаёт приложению исходную строку перехода (`urlString`). При нажатии на уведомление `urlString` содержит строку перехода, при нажатии на кнопку — её `value`. Атрибуты уведомления передаются через `customAttributes`, если они доступны, в обоих случаях. При смахивании обработчик не вызывается. Приложение самостоятельно выполняет переход.
 - `handleSilentNotification(_:fetchCompletionHandler:completion:) -> Bool` — отправляет `.delivered` для тихого уведомления RetailCRM.
 - `PushService.version: String` — версия модуля.
 
@@ -459,10 +448,10 @@ SDK автоматически отправляет статусы взаимо�
 секунд; `Retry-After` может увеличить задержку. Исходные `changed_at` и `button_hash` сохраняются.
 Остальные HTTP-ошибки и ошибки кодирования не повторяются.
 
-Записи очереди сериализуются в JSON и сохраняются в `UserDefaults.standard` отдельно в приложении
-и push-расширении. Повторы выполняются при доступной сети, пока соответствующий процесс работает;
-после его остановки очередь возобновляется при создании
-`PushService` или `PushNotificationHandler` в этом же процессе. iOS не гарантирует выполнение повторов
+SDK сохраняет статусы, ожидающие повторной отправки, в локальной базе SQLite.
+Повторы выполняются при доступной сети, пока работает процесс с обработчиком SDK.
+При повторном создании `PushService` или `PushNotificationHandler` SDK возобновляет обработку доступной ему сохранённой очереди.
+iOS не гарантирует выполнение повторов
 в приостановленном приложении или завершённом расширении.
 
 `completion` вызывается один раз с результатом первой попытки, после сохранения временной ошибки
@@ -510,13 +499,14 @@ CrmSdk.shared.pushService.onStatusRetryUpdate = { update in
 - `authorizationDenied` — пользователь отказал в разрешении на уведомления.
 - `operationSuperseded` — ожидающий вызов заменён другим списком категорий до начала запроса.
 - `emptyPushToken` — push-токен отсутствует; `registerNotificationCategories` ожидает его готовности перед отправкой.
-- `emptyFCMToken`, `emptyFID`, `firebaseMessaging(Error)`, `firebaseInstallations(Error)`, `emptyFirebaseProjectID`, `firebaseInstallationIDDisabled` — ошибки получения токенов и настройки Firebase.
+- `emptyFCMToken`, `emptyFID` — пустой FCM-токен или FID. Регистрация ожидает передачи валидного токена.
+- `emptyFirebaseProjectID` — переданный project ID пуст после удаления пробелов и переводов строк. При готовности остальных данных ошибка поступает в `onPushRegistrationResult` и ожидающий `registerNotificationCategories` (`completion` или `catch` у async-версии); запрос на сервер не отправляется. Ошибки получения токенов и настройки Firebase обрабатывает приложение.
 - `invalidHTTPResponse(String)`, `requestEncodingFailed(String)`, `requestFailed(String)`, `httpStatus(Int, [String])` — ошибки регистрации токена на сервере.
 - `statusReporting(StatusReportingFailure)` — ошибка отправки статуса: `requestEncodingFailed(String)`, `invalidHTTPResponse(String)`, `requestFailed(String)` или `httpStatus(Int, [String])`.
 
 ## Пример реализации AppDelegate
 
-В примере SDK запускается без идентификатора клиента. После входа клиента вызовите
+Пример использует FCM-токены. Firebase подключён и настроен в приложении. SDK запускается без идентификатора клиента. После входа клиента вызовите
 `CrmSdk.shared.setCustomerIdentity(_:)` и дождитесь успешного завершения.
 Передайте `customerId` либо `siteCustomerId` вместе с `siteCode`.
 До получения идентификатора клиента регистрация push-подписки ожидает готовности сессии.
@@ -526,6 +516,8 @@ CrmSdk.shared.pushService.onStatusRetryUpdate = { update in
 import UIKit
 import Core
 import FirebaseCore
+import FirebaseMessaging
+import UserNotifications
 import PushService
 
 @main
@@ -540,14 +532,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        CrmSdk.shared.pushService.setDeviceToken(deviceToken) { result in
-            switch result {
-            case .success(let token):
-                print("Токен: \(token)")
-            case .failure(let error):
-                print("Не удалось получить токен: \(error)")
-            }
-        }
+        Messaging.messaging().apnsToken = deviceToken
     }
 
     func application(
@@ -578,8 +563,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     private func configureServices(_ application: UIApplication) {
         self.firebaseConfigure()
-        self.registerNootificationCenter(application)
         self.configureCrmSdk()
+        Messaging.messaging().delegate = self
+        self.registerNootificationCenter(application)
     }
 
     private func firebaseConfigure() {
@@ -634,6 +620,23 @@ private extension AppDelegate {
             if case let .failure(error) = result, error != .operationSuperseded {
                 print("Could not apply push categories: \(error.localizedDescription)")
             }
+        }
+    }
+}
+
+// MessagingDelegate
+extension AppDelegate: MessagingDelegate {
+    nonisolated func messaging(
+        _ messaging: Messaging,
+        didReceiveRegistrationToken fcmToken: String?
+    ) {
+        guard let fcmToken, !fcmToken.isEmpty else { return }
+        Task { @MainActor in
+            guard let projectID = FirebaseApp.app()?.options.projectID else {
+                print("Firebase project ID is missing")
+                return
+            }
+            CrmSdk.shared.pushService.setToken(.fcm(fcmToken), firebaseProjectId: projectID)
         }
     }
 }
