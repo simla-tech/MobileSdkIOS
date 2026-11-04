@@ -149,7 +149,7 @@ jobs:
 
   hosted_tests:
     name: Tests / TestHost
-    needs: builds
+    needs: module_tests
     runs-on: macos-26
     timeout-minutes: 20
     steps:
