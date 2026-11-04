@@ -1,6 +1,18 @@
 require 'fileutils'
+require 'optparse'
 require 'pathname'
 require 'xcodeproj'
+
+options = { manager: 'pod' }
+OptionParser.new do |parser|
+  parser.on('--manager MANAGER', %w[pod spm]) { |value| options[:manager] = value }
+  parser.on('--git URL') { |value| options[:git] = value }
+  parser.on('--tag VERSION') { |value| options[:tag] = value }
+end.parse!
+abort 'Pass --git and --tag together.' if options.key?(:git) != options.key?(:tag)
+if options[:manager] == 'spm' && !options.key?(:git)
+  abort 'SPM integration builds require --git and --tag.'
+end
 
 sdk_path = Pathname.new(ARGV.fetch(0)).expand_path
 build_path = Pathname.new(ARGV.fetch(1)).expand_path
@@ -64,31 +76,60 @@ File.write(build_path.join('NotificationService.swift'), <<~SWIFT)
 SWIFT
 app.add_file_references([project.main_group.new_file('App.swift')])
 notification_extension.add_file_references([project.main_group.new_file('NotificationService.swift')])
+
+if options[:manager] == 'spm'
+  package = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+  package.repositoryURL = options.fetch(:git)
+  package.requirement = { 'kind' => 'exactVersion', 'version' => options.fetch(:tag) }
+  project.root_object.package_references << package
+  {
+    app => %w[Core OnlineConsultant Tracker Recommendations PushService PushNotificationExtension],
+    notification_extension => %w[PushNotificationExtension]
+  }.each do |target, products|
+    products.each do |name|
+      product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+      product.package = package
+      product.product_name = name
+      target.package_product_dependencies << product
+      link = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+      link.product_ref = product
+      target.frameworks_build_phase.files << link
+    end
+  end
+end
+
 project.save
 scheme = Xcodeproj::XCScheme.new
 scheme.add_build_target(app)
 scheme.set_launch_target(app)
 scheme.save_as(project.path, 'PodBuild', true)
 
-File.write(build_path.join('Podfile'), <<~PODS)
-  source 'https://cdn.cocoapods.org/'
-  platform :ios, '15.0'
-  use_frameworks! :linkage => :static
+if options[:manager] == 'pod'
+  sdk_source = if options.key?(:git)
+                 { git: options.fetch(:git), tag: options.fetch(:tag) }
+               else
+                 { path: sdk_path.to_s }
+               end
+  File.write(build_path.join('Podfile'), <<~PODS)
+    source 'https://cdn.cocoapods.org/'
+    platform :ios, '15.0'
+    use_frameworks! :linkage => :static
 
-  sdk_path = #{sdk_path.to_s.dump}
-  target 'PodBuild' do
-    %w[
-      SimlaCore SimlaOnlineConsultant SimlaTracker SimlaRecommendations
-      SimlaPushService SimlaPushNotificationExtension SimlaSDKConfiguration SimlaSQLiteStorage
-    ].each do |name|
-      pod name, :path => sdk_path
+    sdk_source = #{sdk_source.inspect}
+    target 'PodBuild' do
+      %w[
+        SimlaCore SimlaOnlineConsultant SimlaTracker SimlaRecommendations
+        SimlaPushService SimlaPushNotificationExtension SimlaSDKConfiguration SimlaSQLiteStorage
+      ].each do |name|
+        pod name, sdk_source
+      end
     end
-  end
 
-  target 'NotificationService' do
-    pod 'SimlaSDKConfiguration', :path => sdk_path
-    pod 'SimlaSQLiteStorage', :path => sdk_path
-    pod 'SimlaPushNotificationExtension', :path => sdk_path
-  end
-PODS
-puts "CocoaPods build project: #{build_path}"
+    target 'NotificationService' do
+      pod 'SimlaSDKConfiguration', sdk_source
+      pod 'SimlaSQLiteStorage', sdk_source
+      pod 'SimlaPushNotificationExtension', sdk_source
+    end
+  PODS
+end
+puts "#{options[:manager]} integration build project: #{build_path}"

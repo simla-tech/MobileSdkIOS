@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'SimlaCore'
-  s.version = '0.1.0'
+  s.version = '1.0.0'
   s.summary = 'Shared configuration, sessions and networking for the Simla iOS SDK.'
   s.homepage = 'https://github.com/simla-tech/MobileSdkIOS'
   s.license = { :type => 'Apache-2.0', :file => 'LICENSE' }

@@ -4,7 +4,7 @@ import Foundation
 package actor SessionRuntime {
 
     /// Semantic version of the connect module bundled with this package.
-    nonisolated package static let version = "0.1.0"
+    nonisolated package static let version = "1.0.0"
 
     /// Runtime configuration used for connect requests.
     nonisolated package let config: SessionConfig
