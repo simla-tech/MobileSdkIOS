@@ -54,7 +54,7 @@ Swift-модуль / CocoaPods - Назначение
 https://github.com/simla-tech/MobileSdkIOS.git
 ```
 
-Выберите **Exact Version → 0.1.0** для конкретного выпуска или **Branch → main** для подключения из ветки.
+Выберите **Exact Version → 1.0.0** для конкретного выпуска или **Branch → main** для подключения из ветки.
 
 Добавьте продукт `Core` и необходимые продукты SDK к таргету приложения.
 Например, для чата — `Core` и `OnlineConsultant`.
@@ -81,7 +81,7 @@ sdk_source = {
 ```ruby
 sdk_source = {
   :git => 'https://github.com/simla-tech/MobileSdkIOS.git',
-  :tag => '0.1.0'
+  :tag => '1.0.0'
 }
 ```
 

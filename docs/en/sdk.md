@@ -52,7 +52,7 @@ In Xcode, select **File → Add Package Dependencies** and enter:
 https://github.com/simla-tech/MobileSdkIOS.git
 ```
 
-Select **Exact Version → 0.1.0** for a specific release or **Branch → main** to install from the branch.
+Select **Exact Version → 1.0.0** for a specific release or **Branch → main** to install from the branch.
 
 Add `Core` and the required SDK products to your application target.
 For example, chat requires `Core` and `OnlineConsultant`.
@@ -79,7 +79,7 @@ This configuration installs the SDK from the `main` branch. To install a specifi
 ```ruby
 sdk_source = {
   :git => 'https://github.com/simla-tech/MobileSdkIOS.git',
-  :tag => '0.1.0'
+  :tag => '1.0.0'
 }
 ```
 
