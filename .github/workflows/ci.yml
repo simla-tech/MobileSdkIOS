@@ -148,7 +148,7 @@ jobs:
             ${{ runner.temp }}/pod-build.log
 
   hosted_tests:
-    name: Tests / TestHost
+    name: Tests / Push notifications (iOS Simulator)
     needs: module_tests
     runs-on: macos-26
     timeout-minutes: 20
@@ -183,7 +183,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: tests-TestHost
+          name: tests-push-notifications-ios-simulator
           retention-days: 7
           if-no-files-found: ignore
           path: |
