@@ -35,6 +35,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Test SDK version validation
+        if: ${{ matrix.kind == 'spm' }}
+        run: python3 -B -m unittest discover -s .github/scripts -p 'test_check_versions.py' -v
+
+      - name: Check SDK version consistency
+        run: python3 .github/scripts/check-versions.py
+
       - name: Show Xcode version
         run: xcodebuild -version
 
