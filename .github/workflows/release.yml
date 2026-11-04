@@ -3,18 +3,27 @@ name: Release
 on:
   push:
     tags: ['**']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, for example 1.0.0
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   version:
     name: Release version
-    if: ${{ !github.event.deleted }}
+    if: ${{ github.event_name != 'push' || !github.event.deleted }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -23,6 +32,7 @@ jobs:
       - name: Check out tagged commit
         uses: actions/checkout@v7
         with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -43,14 +53,14 @@ jobs:
         run: python3 -B -m unittest discover -s .github/scripts -p 'test_*.py' -v
 
       - name: Validate SDK versions against tag
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: python3 .github/scripts/check-versions.py --tag "$RELEASE_TAG"
 
   ci:
     name: Release CI
     needs: version
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.version.outputs.commit }}
 
   integration:
     name: Release integration / ${{ matrix.manager }}
@@ -65,12 +75,12 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
       COCOAPODS_DISABLE_STATS: 'true'
       SDK_REPOSITORY_URL: https://github.com/${{ github.repository }}.git
-      RELEASE_TAG: ${{ github.ref_name }}
       PACKAGE_MANAGER: ${{ matrix.manager }}
     steps:
       - name: Check out tagged commit
         uses: actions/checkout@v7
         with:
+          ref: ${{ needs.version.outputs.commit }}
           persist-credentials: false
 
       - name: Show tool versions
@@ -147,7 +157,6 @@ jobs:
       - name: Publish release for the verified tag
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
           EXPECTED_COMMIT: ${{ needs.version.outputs.commit }}
           SDK_REPOSITORY_URL: https://github.com/${{ github.repository }}.git
         run: bash .github/scripts/publish-release.sh
