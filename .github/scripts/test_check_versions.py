@@ -114,6 +114,25 @@ class VersionCheckTests(unittest.TestCase):
             check_versions.validate(self.root),
         )
 
+    def test_matching_release_tag_passes(self):
+        self.assertEqual(check_versions.validate(self.root, "1.2.3"), [])
+
+    def test_versions_can_agree_but_mismatch_the_release_tag(self):
+        errors = check_versions.validate(self.root, "1.2.4")
+        self.assertEqual(len(errors), 14)
+        self.assertTrue(all("expected release tag '1.2.4'" in error for error in errors))
+
+    def test_invalid_release_tag_names_fail(self):
+        for tag in ("v1.2.3", "1.2", "01.2.3", "1.2.3-01", "release/1.2.3"):
+            with self.subTest(tag=tag):
+                self.assertIn("semantic version", check_versions.validate(self.root, tag)[0])
+
+    def test_prerelease_tag_is_supported(self):
+        tag = "1.2.3-rc.1"
+        for name, content in self.files.items():
+            self.write(name, content.replace("1.2.3", tag))
+        self.assertEqual(check_versions.validate(self.root, tag), [])
+
 
 if __name__ == "__main__":
     unittest.main()

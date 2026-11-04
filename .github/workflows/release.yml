@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags: ['**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version:
+    name: Release version
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify tag belongs to the default branch
+        id: source
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor HEAD "origin/$DEFAULT_BRANCH"; then
+            echo "Release tag must point to a commit from $DEFAULT_BRANCH." >&2
+            exit 1
+          fi
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Test release validation
+        run: python3 -B -m unittest discover -s .github/scripts -p 'test_*.py' -v
+
+      - name: Validate SDK versions against tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 .github/scripts/check-versions.py --tag "$RELEASE_TAG"
+
+  ci:
+    name: Release CI
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  integration:
+    name: Release integration / ${{ matrix.manager }}
+    needs: version
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        manager: [spm, pod]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+      COCOAPODS_DISABLE_STATS: 'true'
+      SDK_REPOSITORY_URL: https://github.com/${{ github.repository }}.git
+      RELEASE_TAG: ${{ github.ref_name }}
+      PACKAGE_MANAGER: ${{ matrix.manager }}
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Show tool versions
+        run: |
+          xcodebuild -version
+          pod --version
+
+      - name: Prepare application and extension using the Git tag
+        run: |
+          ruby .github/scripts/prepare-sdk-build.rb \
+            "$GITHUB_WORKSPACE" "$RUNNER_TEMP/SimlaReleaseBuild" \
+            --manager "$PACKAGE_MANAGER" \
+            --git "$SDK_REPOSITORY_URL" --tag "$RELEASE_TAG"
+
+      - name: Install CocoaPods dependencies from Git
+        if: ${{ matrix.manager == 'pod' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/SimlaReleaseBuild"
+          pod install 2>&1 | tee "$RUNNER_TEMP/release-pod-install.log"
+
+      - name: Build application and extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_path="$RUNNER_TEMP/SimlaReleaseBuild"
+          if [[ "$PACKAGE_MANAGER" == "spm" ]]; then
+            container=(-project "$build_path/PodBuild.xcodeproj")
+          else
+            container=(-workspace "$build_path/PodBuild.xcworkspace")
+          fi
+          xcodebuild \
+            "${container[@]}" \
+            -scheme PodBuild \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/SimlaReleaseDerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SimlaReleaseSourcePackages" \
+            -resultBundlePath "$RUNNER_TEMP/ReleaseIntegration.xcresult" \
+            build CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/release-build.log"
+
+      - name: Upload integration diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-integration-${{ matrix.manager }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/release-pod-install.log
+            ${{ runner.temp }}/release-build.log
+            ${{ runner.temp }}/ReleaseIntegration.xcresult
+            ${{ runner.temp }}/SimlaReleaseBuild/Podfile
+            ${{ runner.temp }}/SimlaReleaseBuild/Podfile.lock
+            ${{ runner.temp }}/SimlaReleaseBuild/PodBuild.xcodeproj/project.pbxproj
+            ${{ runner.temp }}/SimlaReleaseBuild/PodBuild.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+  publish:
+    name: Publish GitHub Release
+    needs: [version, ci, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Check out verified commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.commit }}
+          persist-credentials: false
+
+      - name: Publish release for the verified tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_COMMIT: ${{ needs.version.outputs.commit }}
+          SDK_REPOSITORY_URL: https://github.com/${{ github.repository }}.git
+        run: bash .github/scripts/publish-release.sh
